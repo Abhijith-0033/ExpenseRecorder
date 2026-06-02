@@ -64,6 +64,54 @@ router.post('/categories', (req, res) => {
   }
 });
 
+// ─── PUT /api/categories/:id ──────────────────────────────────────────────────
+// Edits name/color. Default categories cannot be renamed (but color can change).
+router.put('/categories/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid category ID.' });
+  }
+
+  const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+  if (!category) {
+    return res.status(404).json({ error: 'Category not found.' });
+  }
+
+  const { name, color } = req.body;
+
+  // Validate color if provided
+  if (color !== undefined) {
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return res.status(400).json({ error: 'Color must be a valid 6-digit hex color.' });
+    }
+  }
+
+  // Default categories: only allow color change, not name
+  let newName = category.name;
+  if (name !== undefined) {
+    if (category.is_default) {
+      return res.status(403).json({ error: 'Cannot rename a built-in category.' });
+    }
+    const trimmed = String(name).trim();
+    if (!trimmed) return res.status(400).json({ error: 'Category name cannot be empty.' });
+    if (trimmed.length > 50) return res.status(400).json({ error: 'Name must be 50 characters or fewer.' });
+    // Check duplicate (excluding self)
+    const dup = db.prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?').get(trimmed, id);
+    if (dup) return res.status(409).json({ error: 'A category with this name already exists.' });
+    newName = trimmed;
+  }
+
+  const newColor = color !== undefined ? color : category.color;
+
+  try {
+    db.prepare('UPDATE categories SET name = ?, color = ? WHERE id = ?').run(newName, newColor, id);
+    const updated = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DELETE /api/categories/:id ───────────────────────────────────────────────
 // Deletes a custom (non-default) category
 router.delete('/categories/:id', (req, res) => {

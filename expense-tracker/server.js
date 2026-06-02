@@ -4,6 +4,7 @@ const expensesRouter   = require('./routes/expenses');
 const categoriesRouter = require('./routes/categories');
 const analyticsRouter  = require('./routes/analytics');
 const incomeRouter     = require('./routes/income');
+const incomeCatsRouter = require('./routes/income_categories');
 const accountsRouter   = require('./routes/accounts');
 
 const app  = express();
@@ -14,6 +15,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', expensesRouter);
 app.use('/api', categoriesRouter);
 app.use('/api', incomeRouter);
+app.use('/api', incomeCatsRouter);
 app.use('/api', accountsRouter);
 app.use('/api/analytics', analyticsRouter);
 

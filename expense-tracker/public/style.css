@@ -1053,7 +1053,8 @@ html.light-theme .moon-icon {
   transform: scale(1.15);
 }
 
-#btn-add-category {
+#btn-add-category,
+#btn-add-income-category {
   background: var(--accent);
   color: #fff;
   border: none;
@@ -1067,7 +1068,9 @@ html.light-theme .moon-icon {
   white-space: nowrap;
 }
 
-#btn-add-category:hover { opacity: 0.85; }
+#btn-add-category:hover,
+#btn-add-income-category:hover { opacity: 0.85; }
+
 
 .form-success {
   margin-top: 10px;
@@ -1129,6 +1132,56 @@ html.light-theme .moon-icon {
   color: var(--danger);
   background: rgba(247, 112, 106, 0.1);
 }
+
+.btn-edit-cat {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.btn-edit-cat:hover {
+  background: rgba(107, 139, 255, 0.1);
+  border-color: var(--accent);
+}
+
+.category-item-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.cat-edit-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+
+.cat-edit-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(107, 139, 255, 0.2);
+}
+
+.cat-edit-swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+
 
 /* ─── Empty state (extended for new pages using .hidden class) ────────────── */
 .empty-state.hidden { display: none; }
@@ -1707,5 +1760,125 @@ html.light-theme .cal-day.has-expense .cal-day-amount {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+
+/* ─── Toast Notifications ──────────────────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 380px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: all;
+  animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text);
+  position: relative;
+  overflow: hidden;
+}
+
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 10px 0 0 10px;
+}
+
+.toast.toast-success::before { background: var(--success); }
+.toast.toast-error::before   { background: var(--danger); }
+.toast.toast-info::before    { background: var(--accent); }
+
+.toast.toast-hiding {
+  animation: toastSlideOut 0.3s ease forwards;
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.toast.toast-success .toast-icon { color: var(--success); }
+.toast.toast-error   .toast-icon { color: var(--danger); }
+.toast.toast-info    .toast-icon { color: var(--accent); }
+
+.toast-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.toast-close:hover { color: var(--text); }
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(110%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+    max-height: 80px;
+    margin-bottom: 0;
+  }
+  to {
+    transform: translateX(110%);
+    opacity: 0;
+    max-height: 0;
+    margin-bottom: -10px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* Light theme toast tweaks */
+html.light-theme .toast {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
 
 

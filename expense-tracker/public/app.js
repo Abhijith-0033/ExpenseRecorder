@@ -227,6 +227,10 @@ async function handleFormSubmit(e) {
     formError.textContent = 'Please select a date.';
     return;
   }
+  if (date > getTodayString()) {
+    formError.textContent = 'Expense date cannot be in the future.';
+    return;
+  }
 
   formError.textContent = '';
 
@@ -255,7 +259,8 @@ async function handleFormSubmit(e) {
       return;
     }
 
-    if (state.editingId !== null) {
+    const wasEditing = state.editingId !== null;
+    if (wasEditing) {
       cancelEdit();
     } else {
       document.getElementById('expense-form').reset();
@@ -264,6 +269,7 @@ async function handleFormSubmit(e) {
 
     await loadExpenses();
     await loadSummary();
+    showToast(wasEditing ? '✏️ Expense updated successfully!' : '✅ Expense added successfully!');
 
   } catch (err) {
     formError.textContent = 'Network error. Please check the server is running.';
@@ -312,23 +318,34 @@ async function deleteExpense(id) {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.error || 'Failed to delete expense.');
+      showToast(data.error || 'Failed to delete expense.', 'error');
       return;
     }
 
     await loadExpenses();
     await loadSummary();
+    showToast('🗑️ Expense deleted.', 'info');
 
   } catch (err) {
-    alert('Network error. Please check the server is running.');
+    showToast('Network error. Please check the server.', 'error');
     console.error(err);
   }
 }
 
 function onFilterChange() {
+  const from = document.getElementById('filter-from').value;
+  const to   = document.getElementById('filter-to').value;
+
+  // Validate date range
+  if (from && to && from > to) {
+    showToast('"From" date must be on or before the "To" date.', 'error', 4000);
+    document.getElementById('filter-to').value = '';
+    return;
+  }
+
   state.filters.category = document.getElementById('filter-category').value;
-  state.filters.from     = document.getElementById('filter-from').value;
-  state.filters.to       = document.getElementById('filter-to').value;
+  state.filters.from     = from;
+  state.filters.to       = to;
   state.filters.search   = document.getElementById('filter-search').value.trim();
   loadExpenses();
 }
@@ -347,8 +364,43 @@ function clearFilters() {
   loadExpenses();
 }
 
+// ─── Toast Notification System ───────────────────────────────────────────────
+function showToast(message, type = 'success', duration = 3500) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const icons = {
+    success: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    error:   '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    info:    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+  };
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-message">${message}</div>
+    <button class="toast-close" aria-label="Dismiss">&times;</button>
+  `;
+
+  const dismiss = () => {
+    toast.classList.add('toast-hiding');
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  };
+
+  toast.querySelector('.toast-close').addEventListener('click', dismiss);
+  container.appendChild(toast);
+
+  setTimeout(dismiss, duration);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('field-date').value = getTodayString();
+  const today = getTodayString();
+  // Set today as the default and maximum allowed date (no future expenses/income)
+  const expDate = document.getElementById('field-date');
+  if (expDate) { expDate.value = today; expDate.max = today; }
+  const incDate = document.getElementById('field-income-date');
+  if (incDate) { incDate.value = today; incDate.max = today; }
 
   loadSummary();
   loadExpenses();
@@ -1146,11 +1198,39 @@ function initSettings() {
     .addEventListener('keydown', e => {
       if (e.key === 'Enter') addCategory();
     });
+
+  // Income category swatches
+  const incSwatchContainer = document.getElementById('income-color-swatches');
+  const incHiddenInput     = document.getElementById('new-income-category-color');
+  if (incSwatchContainer && incHiddenInput) {
+    SWATCH_COLORS.forEach((color, i) => {
+      const swatch = document.createElement('div');
+      swatch.className        = 'color-swatch' + (i === 0 ? ' selected' : '');
+      swatch.style.background = color;
+      swatch.dataset.color    = color;
+      swatch.title            = color;
+      swatch.addEventListener('click', () => {
+        incSwatchContainer.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+        swatch.classList.add('selected');
+        incHiddenInput.value = color;
+      });
+      incSwatchContainer.appendChild(swatch);
+    });
+  }
+
+  const addIncBtn = document.getElementById('btn-add-income-category');
+  if (addIncBtn) addIncBtn.addEventListener('click', addIncomeCategory);
+
+  const incNameInput = document.getElementById('new-income-category-name');
+  if (incNameInput) incNameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') addIncomeCategory();
+  });
 }
 
 async function refreshSettings() {
   const categories = await fetchCategories();
   renderCategoriesList(categories);
+  await refreshIncomeCategories();
 }
 
 function renderCategoriesList(categories) {
@@ -1170,7 +1250,7 @@ function renderCategoriesList(categories) {
 
     const name = document.createElement('span');
     name.className  = 'category-name';
-    name.textContent = cat.name;         // XSS-safe
+    name.textContent = cat.name;
 
     left.appendChild(dot);
     left.appendChild(name);
@@ -1184,17 +1264,26 @@ function renderCategoriesList(categories) {
 
     item.appendChild(left);
 
-    // Only custom (non-default) categories get a delete button
+    const actions = document.createElement('div');
+    actions.className = 'category-item-actions';
+
+    // Edit button (always visible — built-ins can change color)
+    const editBtn = document.createElement('button');
+    editBtn.className   = 'btn-edit-cat';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editCategory(cat.id, cat.name, cat.color, cat.is_default));
+    actions.appendChild(editBtn);
+
+    // Delete button (custom only)
     if (!cat.is_default) {
       const del = document.createElement('button');
       del.className    = 'btn-delete-cat';
       del.textContent  = 'Delete';
-      del.dataset.id   = cat.id;
-      del.dataset.name = cat.name;
       del.addEventListener('click', () => deleteCategory(cat.id, cat.name));
-      item.appendChild(del);
+      actions.appendChild(del);
     }
 
+    item.appendChild(actions);
     container.appendChild(item);
   }
 }
@@ -1257,6 +1346,147 @@ async function addCategory() {
   }
 }
 
+// Edit category inline — swap name text with an input
+let settingsEditingCatId = null;
+function editCategory(id, currentName, currentColor, isDefault) {
+  settingsEditingCatId = id;
+  const container = document.getElementById('categories-list');
+  // Re-render with inline edit for this item
+  const items = container.querySelectorAll('.category-item');
+  items.forEach(item => {
+    const nameEl = item.querySelector('.category-name');
+    if (!nameEl) return;
+    if (item.querySelector('.btn-edit-cat') &&
+        item.querySelector('.btn-edit-cat').onclick === null) return;
+    // Find this item by matching current edit id
+    const editBtn = item.querySelector('.btn-edit-cat');
+    if (!editBtn) return;
+  });
+
+  // Re-render settings with inline editor for this id
+  fetchCategories().then(cats => {
+    const container2 = document.getElementById('categories-list');
+    container2.innerHTML = '';
+    for (const cat of cats) {
+      const item = document.createElement('div');
+      item.className = 'category-item';
+
+      if (cat.id === id) {
+        // Inline edit row
+        const dot = document.createElement('div');
+        dot.className = 'category-color-dot';
+        dot.style.background = cat.color;
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'cat-edit-input';
+        nameInput.value = cat.name;
+        nameInput.maxLength = 50;
+        if (cat.is_default) nameInput.disabled = true;
+
+        // Color swatches row
+        const swatchRow = document.createElement('div');
+        swatchRow.className = 'cat-edit-swatch-row';
+        let editColorValue = cat.color;
+        SWATCH_COLORS.forEach(sc => {
+          const sw = document.createElement('div');
+          sw.className = 'color-swatch' + (sc === cat.color ? ' selected' : '');
+          sw.style.background = sc;
+          sw.dataset.color = sc;
+          sw.style.width = '18px';
+          sw.style.height = '18px';
+          sw.addEventListener('click', () => {
+            swatchRow.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+            sw.classList.add('selected');
+            editColorValue = sc;
+            dot.style.background = sc;
+          });
+          swatchRow.appendChild(sw);
+        });
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn-edit-cat';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', () => saveCategory(id, nameInput.value, editColorValue));
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-delete-cat';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', () => refreshSettings());
+
+        item.appendChild(dot);
+        item.appendChild(nameInput);
+        item.appendChild(swatchRow);
+        item.appendChild(saveBtn);
+        item.appendChild(cancelBtn);
+        item.style.flexWrap = 'wrap';
+        item.style.gap = '8px';
+      } else {
+        // Normal row
+        const left = document.createElement('div');
+        left.className = 'category-item-left';
+        const dot2 = document.createElement('div');
+        dot2.className = 'category-color-dot';
+        dot2.style.background = cat.color;
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'category-name';
+        nameSpan.textContent = cat.name;
+        left.appendChild(dot2);
+        left.appendChild(nameSpan);
+        if (cat.is_default) {
+          const badge = document.createElement('span');
+          badge.className = 'category-badge-default';
+          badge.textContent = 'Built-in';
+          left.appendChild(badge);
+        }
+        item.appendChild(left);
+        const actions = document.createElement('div');
+        actions.className = 'category-item-actions';
+        const eb = document.createElement('button');
+        eb.className = 'btn-edit-cat';
+        eb.textContent = 'Edit';
+        eb.addEventListener('click', () => editCategory(cat.id, cat.name, cat.color, cat.is_default));
+        actions.appendChild(eb);
+        if (!cat.is_default) {
+          const db2 = document.createElement('button');
+          db2.className = 'btn-delete-cat';
+          db2.textContent = 'Delete';
+          db2.addEventListener('click', () => deleteCategory(cat.id, cat.name));
+          actions.appendChild(db2);
+        }
+        item.appendChild(actions);
+      }
+      container2.appendChild(item);
+    }
+  });
+}
+
+async function saveCategory(id, name, color) {
+  const errorEl   = document.getElementById('settings-error');
+  const successEl = document.getElementById('settings-success');
+  errorEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  try {
+    const res = await fetch(`/api/categories/${id}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name: name.trim(), color })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to update category.', 'error');
+      return;
+    }
+    showToast(`✏️ "${data.name}" updated!`);
+    await refreshSettings();
+    await loadCategoryOptions();
+  } catch (err) {
+    showToast('Network error.', 'error');
+    console.error(err);
+  }
+}
+
 async function deleteCategory(id, name) {
   const confirmed = confirm(
     `Delete the category "${name}"?\n\nThis cannot be done if any expenses use it.`
@@ -1289,6 +1519,281 @@ async function deleteCategory(id, name) {
   } catch (err) {
     errorEl.textContent = 'Network error. Please check the server is running.';
     errorEl.classList.remove('hidden');
+    console.error(err);
+  }
+}
+
+// ─── Income Categories Module ─────────────────────────────────────────────────
+
+async function refreshIncomeCategories() {
+  try {
+    const res = await fetch('/api/income-categories');
+    if (!res.ok) return;
+    const cats = await res.json();
+    renderIncomeCategoriesList(cats);
+    // Also refresh the income form/filter dropdowns
+    loadIncomeCategoryOptions(cats);
+  } catch (err) {
+    console.error('Error loading income categories:', err);
+  }
+}
+
+function loadIncomeCategoryOptions(cats) {
+  const formSelect   = document.getElementById('field-income-category');
+  const filterSelect = document.getElementById('filter-income-category');
+  if (!formSelect || !filterSelect) return;
+
+  const savedForm   = formSelect.value;
+  const savedFilter = filterSelect.value;
+
+  formSelect.innerHTML   = '<option value="">Select category</option>';
+  filterSelect.innerHTML = '<option value="">All Categories</option>';
+
+  cats.forEach(cat => {
+    const opt1 = document.createElement('option');
+    opt1.value = cat.name;
+    opt1.textContent = cat.name;
+    formSelect.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = cat.name;
+    opt2.textContent = cat.name;
+    filterSelect.appendChild(opt2);
+  });
+
+  if (savedForm)   formSelect.value   = savedForm;
+  if (savedFilter) filterSelect.value = savedFilter;
+}
+
+function renderIncomeCategoriesList(categories) {
+  const container = document.getElementById('income-categories-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const cat of categories) {
+    const item = document.createElement('div');
+    item.className = 'category-item';
+
+    const left = document.createElement('div');
+    left.className = 'category-item-left';
+
+    const dot = document.createElement('div');
+    dot.className = 'category-color-dot';
+    dot.style.background = cat.color;
+
+    const name = document.createElement('span');
+    name.className  = 'category-name';
+    name.textContent = cat.name;
+
+    left.appendChild(dot);
+    left.appendChild(name);
+
+    if (cat.is_default) {
+      const badge = document.createElement('span');
+      badge.className  = 'category-badge-default';
+      badge.textContent = 'Built-in';
+      left.appendChild(badge);
+    }
+
+    item.appendChild(left);
+
+    const actions = document.createElement('div');
+    actions.className = 'category-item-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className   = 'btn-edit-cat';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => editIncomeCategory(cat.id, cat.name, cat.color, cat.is_default));
+    actions.appendChild(editBtn);
+
+    if (!cat.is_default) {
+      const del = document.createElement('button');
+      del.className   = 'btn-delete-cat';
+      del.textContent = 'Delete';
+      del.addEventListener('click', () => deleteIncomeCategory(cat.id, cat.name));
+      actions.appendChild(del);
+    }
+
+    item.appendChild(actions);
+    container.appendChild(item);
+  }
+}
+
+async function addIncomeCategory() {
+  const nameInput  = document.getElementById('new-income-category-name');
+  const colorInput = document.getElementById('new-income-category-color');
+  const errorEl    = document.getElementById('income-settings-error');
+  const successEl  = document.getElementById('income-settings-success');
+
+  const name  = nameInput.value.trim();
+  const color = colorInput.value;
+
+  errorEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  if (!name) {
+    errorEl.textContent = 'Category name cannot be empty.';
+    errorEl.classList.remove('hidden');
+    nameInput.focus();
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/income-categories', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name, color })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Failed to add category.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    nameInput.value = '';
+    successEl.textContent = `"${data.name}" added!`;
+    successEl.classList.remove('hidden');
+    setTimeout(() => successEl.classList.add('hidden'), 3000);
+    showToast(`✅ Income category "${data.name}" added!`);
+    await refreshIncomeCategories();
+  } catch (err) {
+    errorEl.textContent = 'Network error.';
+    errorEl.classList.remove('hidden');
+    console.error(err);
+  }
+}
+
+function editIncomeCategory(id, currentName, currentColor, isDefault) {
+  fetch('/api/income-categories').then(r => r.json()).then(cats => {
+    const container = document.getElementById('income-categories-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    for (const cat of cats) {
+      const item = document.createElement('div');
+      item.className = 'category-item';
+
+      if (cat.id === id) {
+        const dot = document.createElement('div');
+        dot.className = 'category-color-dot';
+        dot.style.background = cat.color;
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'cat-edit-input';
+        nameInput.value = cat.name;
+        nameInput.maxLength = 50;
+        if (cat.is_default) nameInput.disabled = true;
+
+        const swatchRow = document.createElement('div');
+        swatchRow.className = 'cat-edit-swatch-row';
+        let editColorValue = cat.color;
+        SWATCH_COLORS.forEach(sc => {
+          const sw = document.createElement('div');
+          sw.className = 'color-swatch' + (sc === cat.color ? ' selected' : '');
+          sw.style.cssText = `background:${sc};width:18px;height:18px;`;
+          sw.dataset.color = sc;
+          sw.addEventListener('click', () => {
+            swatchRow.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+            sw.classList.add('selected');
+            editColorValue = sc;
+            dot.style.background = sc;
+          });
+          swatchRow.appendChild(sw);
+        });
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'btn-edit-cat';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', () => saveIncomeCategory(id, nameInput.value, editColorValue));
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-delete-cat';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', () => refreshIncomeCategories());
+
+        item.appendChild(dot);
+        item.appendChild(nameInput);
+        item.appendChild(swatchRow);
+        item.appendChild(saveBtn);
+        item.appendChild(cancelBtn);
+        item.style.cssText = 'flex-wrap:wrap;gap:8px;';
+      } else {
+        const left = document.createElement('div');
+        left.className = 'category-item-left';
+        const d2 = document.createElement('div');
+        d2.className = 'category-color-dot';
+        d2.style.background = cat.color;
+        const n2 = document.createElement('span');
+        n2.className = 'category-name';
+        n2.textContent = cat.name;
+        left.appendChild(d2);
+        left.appendChild(n2);
+        if (cat.is_default) {
+          const b = document.createElement('span');
+          b.className = 'category-badge-default';
+          b.textContent = 'Built-in';
+          left.appendChild(b);
+        }
+        item.appendChild(left);
+        const acts = document.createElement('div');
+        acts.className = 'category-item-actions';
+        const eb = document.createElement('button');
+        eb.className = 'btn-edit-cat';
+        eb.textContent = 'Edit';
+        eb.addEventListener('click', () => editIncomeCategory(cat.id, cat.name, cat.color, cat.is_default));
+        acts.appendChild(eb);
+        if (!cat.is_default) {
+          const db3 = document.createElement('button');
+          db3.className = 'btn-delete-cat';
+          db3.textContent = 'Delete';
+          db3.addEventListener('click', () => deleteIncomeCategory(cat.id, cat.name));
+          acts.appendChild(db3);
+        }
+        item.appendChild(acts);
+      }
+      container.appendChild(item);
+    }
+  });
+}
+
+async function saveIncomeCategory(id, name, color) {
+  try {
+    const res = await fetch(`/api/income-categories/${id}`, {
+      method:  'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ name: name.trim(), color })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to update income category.', 'error');
+      return;
+    }
+    showToast(`✏️ "${data.name}" updated!`);
+    await refreshIncomeCategories();
+  } catch (err) {
+    showToast('Network error.', 'error');
+    console.error(err);
+  }
+}
+
+async function deleteIncomeCategory(id, name) {
+  const confirmed = confirm(`Delete the income category "${name}"?\n\nThis cannot be done if any income records use it.`);
+  if (!confirmed) return;
+
+  try {
+    const res  = await fetch(`/api/income-categories/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Failed to delete.', 'error');
+      return;
+    }
+    showToast(`🗑️ "${name}" deleted.`, 'info');
+    await refreshIncomeCategories();
+  } catch (err) {
+    showToast('Network error.', 'error');
     console.error(err);
   }
 }
@@ -1488,9 +1993,18 @@ function initIncome() {
 }
 
 function onIncomeFilterChange() {
+  const from = document.getElementById('filter-income-from').value;
+  const to   = document.getElementById('filter-income-to').value;
+
+  if (from && to && from > to) {
+    showToast('"From" date must be on or before the "To" date.', 'error', 4000);
+    document.getElementById('filter-income-to').value = '';
+    return;
+  }
+
   incomeState.filters.category = document.getElementById('filter-income-category').value;
-  incomeState.filters.from     = document.getElementById('filter-income-from').value;
-  incomeState.filters.to       = document.getElementById('filter-income-to').value;
+  incomeState.filters.from     = from;
+  incomeState.filters.to       = to;
   incomeState.filters.search   = document.getElementById('filter-income-search').value.trim();
   loadIncome();
 }
@@ -1510,8 +2024,11 @@ function clearIncomeFilters() {
 }
 
 async function refreshIncome() {
-  document.getElementById('field-income-date').value = getTodayString();
+  const today = getTodayString();
+  const incDate = document.getElementById('field-income-date');
+  if (incDate) { incDate.value = today; incDate.max = today; }
   await loadAccountSelectOptions();
+  await refreshIncomeCategories();  // also updates form/filter dropdowns
   await loadIncome();
   await loadIncomeSummary();
 }
@@ -1713,6 +2230,10 @@ async function handleIncomeFormSubmit(e) {
     formError.textContent = 'Please select a date.';
     return;
   }
+  if (date > getTodayString()) {
+    formError.textContent = 'Income date cannot be in the future.';
+    return;
+  }
   if (!account_id) {
     formError.textContent = 'Please select an account.';
     return;
@@ -1743,7 +2264,8 @@ async function handleIncomeFormSubmit(e) {
       return;
     }
 
-    if (incomeState.editingId !== null) {
+    const wasEditingIncome = incomeState.editingId !== null;
+    if (wasEditingIncome) {
       cancelIncomeEdit();
     } else {
       document.getElementById('income-form').reset();
@@ -1751,6 +2273,7 @@ async function handleIncomeFormSubmit(e) {
     }
 
     await refreshIncome();
+    showToast(wasEditingIncome ? '✏️ Income updated successfully!' : '✅ Income added successfully!');
   } catch (err) {
     formError.textContent = 'Network error. Please check the server.';
     console.error(err);
@@ -1798,12 +2321,13 @@ async function deleteIncome(id) {
     const res = await fetch(`/api/income/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
-      alert(data.error || 'Failed to delete income.');
+      showToast(data.error || 'Failed to delete income.', 'error');
       return;
     }
     await refreshIncome();
+    showToast('🗑️ Income deleted.', 'info');
   } catch (err) {
-    alert('Network error.');
+    showToast('Network error.', 'error');
     console.error(err);
   }
 }
