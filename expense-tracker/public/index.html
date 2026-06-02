@@ -12,20 +12,62 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
-  <nav id="main-nav">
-    <div class="nav-brand">
-      <span class="nav-logo">₹</span>
-      <span class="nav-title">ExpenseTracker</span>
-    </div>
-    <div class="nav-tabs">
-      <button class="nav-tab" data-page="dashboard">Dashboard</button>
-      <button class="nav-tab active" data-page="expenses">Expenses</button>
-      <button class="nav-tab" data-page="analysis">Analysis</button>
-      <button class="nav-tab" data-page="settings">Settings</button>
-    </div>
-  </nav>
-  <div class="container">
-    <div class="page" id="page-expenses">
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="nav-logo">₹</span>
+        <div class="brand-details">
+          <span class="brand-title">ExpenseTracker</span>
+          <span class="brand-subtitle">Enterprise Suite</span>
+        </div>
+      </div>
+      <nav class="sidebar-menu">
+        <button class="menu-item" data-page="dashboard">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="menu-item active" data-page="expenses">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>Expenses</span>
+        </button>
+        <button class="menu-item" data-page="analysis">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span>Analysis</span>
+        </button>
+        <button class="menu-item" data-page="settings">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="db-status">
+          <span class="status-indicator-dot"></span>
+          <span class="status-text">DB Connected</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="content-header">
+        <div class="header-left">
+          <h2 id="active-page-title">Expenses</h2>
+          <span class="header-badge">Suite 2.0</span>
+        </div>
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="user-avatar">A</div>
+            <div class="user-info">
+              <span class="user-name">Abhijith</span>
+              <span class="user-role">Administrator</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="page-viewport">
+        <div class="page" id="page-expenses">
     <header class="app-header">
       <h1 class="app-title">Expense Tracker</h1>
       <p class="app-subtitle">Personal finance, simplified.</p>
@@ -178,4 +220,185 @@
       </p>
 
       <div class="table-wrapper">
-        <table 
+        <table class="expense-table" aria-label="List of expenses">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Title</th>
+              <th scope="col">Category</th>
+              <th scope="col" class="text-right">Amount</th>
+              <th scope="col">Note</th>
+              <th scope="col" class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="expense-list">
+            <!-- Rows rendered by app.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+    </div><!-- /#page-expenses -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       DASHBOARD PAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-dashboard">
+
+    <!-- Row 1: Three stat widgets -->
+    <div class="widget-row" id="overview-widgets">
+      <div class="widget" id="widget-daily">
+        <div class="widget-label">Today</div>
+        <div class="widget-amount" id="dash-daily-amount">₹0.00</div>
+        <div class="widget-sub" id="dash-daily-count">0 expenses</div>
+      </div>
+      <div class="widget" id="widget-weekly">
+        <div class="widget-label">This Week</div>
+        <div class="widget-amount" id="dash-weekly-amount">₹0.00</div>
+        <div class="widget-sub" id="dash-weekly-count">0 expenses</div>
+      </div>
+      <div class="widget" id="widget-monthly">
+        <div class="widget-label">This Month</div>
+        <div class="widget-amount" id="dash-monthly-amount">₹0.00</div>
+        <div class="widget-sub" id="dash-monthly-count">0 expenses</div>
+      </div>
+    </div>
+
+    <!-- Row 2: Date range context bar -->
+    <div class="card" id="dash-date-context">
+      <span id="dash-week-range">Week: — to —</span>
+      <span class="separator">·</span>
+      <span id="dash-month-range">Month: — to —</span>
+    </div>
+
+    <!-- Row 3: Recent Transactions -->
+    <div class="card" id="dash-recent-card">
+      <div class="card-header">
+        <h3>Recent Transactions</h3>
+        <button class="link-btn" id="dash-view-all">View All</button>
+      </div>
+      <div id="dash-recent-list">
+        <!-- filled by JS -->
+      </div>
+      <div class="empty-state hidden" id="dash-empty">No expenses recorded yet.</div>
+    </div>
+
+  </div><!-- /#page-dashboard -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ANALYSIS PAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-analysis">
+
+    <!-- Month Selector -->
+    <div class="card month-selector-card">
+      <button class="icon-btn" id="analysis-prev-month">&#8592;</button>
+      <span id="analysis-month-label">Loading...</span>
+      <button class="icon-btn" id="analysis-next-month">&#8594;</button>
+    </div>
+
+    <!-- Chart 1: Daily Spending Bar Chart -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <h3>Daily Spending</h3>
+        <span class="chart-subtitle" id="analysis-daily-total">Total: ₹0.00</span>
+      </div>
+      <div class="chart-container">
+        <canvas id="chart-daily"></canvas>
+      </div>
+      <div class="empty-state hidden" id="analysis-daily-empty">No expenses in this month.</div>
+    </div>
+
+    <!-- Charts Row: Doughnut + Horizontal Bar -->
+    <div class="chart-row">
+      <div class="card chart-card half">
+        <div class="card-header">
+          <h3>By Category</h3>
+        </div>
+        <div class="chart-container chart-container-sm">
+          <canvas id="chart-category-donut"></canvas>
+        </div>
+        <div class="empty-state hidden" id="analysis-donut-empty">No data.</div>
+      </div>
+
+      <div class="card chart-card half">
+        <div class="card-header">
+          <h3>Top Categories</h3>
+        </div>
+        <div class="chart-container chart-container-sm">
+          <canvas id="chart-top-categories"></canvas>
+        </div>
+        <div class="empty-state hidden" id="analysis-top-empty">No data.</div>
+      </div>
+    </div>
+
+    <!-- Chart 4: Month-wise Comparison -->
+    <div class="card chart-card">
+      <div class="card-header">
+        <h3>Month-wise Comparison</h3>
+        <div class="comparison-controls">
+          <label>Show last</label>
+          <select id="comparison-months">
+            <option value="3">3 months</option>
+            <option value="6" selected>6 months</option>
+            <option value="12">12 months</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="chart-comparison"></canvas>
+      </div>
+      <div class="empty-state hidden" id="analysis-comparison-empty">No data.</div>
+    </div>
+
+  </div><!-- /#page-analysis -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SETTINGS PAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-settings">
+
+    <div class="card" id="settings-categories-card">
+      <div class="card-header">
+        <h3>Expense Categories</h3>
+      </div>
+      <p class="settings-desc">
+        Default categories cannot be deleted. Custom categories can only be deleted if no expenses use them.
+      </p>
+
+      <!-- Add new category form -->
+      <div class="settings-add-form">
+        <div class="settings-add-row">
+          <input
+            type="text"
+            id="new-category-name"
+            placeholder="Category name (e.g., Gym, Rent)"
+            maxlength="50"
+          />
+          <div class="color-picker-row">
+            <label>Color:</label>
+            <div id="color-swatches" class="color-swatches">
+              <!-- Color swatches generated by JS -->
+            </div>
+            <input type="hidden" id="new-category-color" value="#f77dc4" />
+          </div>
+          <button id="btn-add-category">Add Category</button>
+        </div>
+        <div class="form-error hidden" id="settings-error"></div>
+        <div class="form-success hidden" id="settings-success"></div>
+      </div>
+
+      <!-- Category list -->
+      <div id="categories-list">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+  </div><!-- /#page-settings -->
+
+      </div><!-- /.page-viewport -->
+    </main><!-- /.main-content -->
+  </div><!-- /.app-layout -->
+
+  <script src="app.js" defer></script>
+</body>
+</html>
