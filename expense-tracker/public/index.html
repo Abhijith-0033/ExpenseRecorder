@@ -397,6 +397,20 @@
       </div>
     </div>
 
+    <!-- Budget Overview Card -->
+    <div class="card" id="budget-overview-card">
+      <div class="card-header">
+        <h3>Budget Overview</h3>
+        <span class="chart-subtitle" id="budget-overview-month">This Month</span>
+      </div>
+      <div id="budget-overview-empty" class="empty-state" style="display:none;">
+        No budgets set. Go to Settings to set monthly budgets per category.
+      </div>
+      <div id="budget-progress-list">
+        <!-- Progress bars rendered by JS -->
+      </div>
+    </div>
+
     <!-- Chart 4: Month-wise Comparison -->
     <div class="card chart-card">
       <div class="card-header">
@@ -493,6 +507,18 @@
       <!-- Income category list -->
       <div id="income-categories-list">
         <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Monthly Budgets Card -->
+    <div class="card" id="budgets-settings-card">
+      <div class="card-header">
+        <h3>Monthly Budgets</h3>
+        <span class="chart-subtitle">Set a spending limit per expense category for each month</span>
+      </div>
+      <p class="settings-desc">Budgets reset every month. You'll get a warning when you exceed a budget — expenses are never blocked.</p>
+      <div id="budgets-list">
+        <!-- Rendered by JS -->
       </div>
     </div>
 

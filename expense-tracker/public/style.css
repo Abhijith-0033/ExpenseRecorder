@@ -1183,8 +1183,149 @@ html.light-theme .moon-icon {
 
 
 
+/* ─── Budget Settings Rows ───────────────────────────────────────────────── */
+.budget-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.budget-row:last-child { border-bottom: none; }
+
+.budget-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+.budget-cat-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.budget-row-mid {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.budget-mini-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.budget-mini-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
+.budget-mini-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.budget-mini-label.budget-over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.budget-row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.budget-amount-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 0.9rem;
+  width: 130px;
+  font-family: var(--font-main);
+  transition: border-color 0.15s;
+}
+.budget-amount-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(107, 139, 255, 0.18);
+}
+
+/* ─── Budget Overview Progress Bars (Analysis Page) ──────────────────────── */
+.budget-progress-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.budget-progress-row:last-child { border-bottom: none; }
+
+.budget-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.budget-progress-cat {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  flex: 1;
+}
+.budget-progress-pct {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.budget-track {
+  height: 10px;
+  background: var(--surface-2);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.budget-fill {
+  height: 100%;
+  border-radius: 99px;
+  width: 0%;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.budget-progress-sub {
+  display: flex;
+  gap: 20px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.budget-progress-sub strong {
+  color: var(--text);
+}
+
+/* ─── Budget Status Badges ───────────────────────────────────────────────── */
+.budget-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.budget-status-over {
+  background: rgba(247, 112, 106, 0.15);
+  color: var(--danger);
+}
+.budget-status-warn {
+  background: rgba(247, 197, 106, 0.2);
+  color: #c49a0a;
+}
+.light-theme .budget-status-warn { color: #8a6b00; }
+
 /* ─── Empty state (extended for new pages using .hidden class) ────────────── */
 .empty-state.hidden { display: none; }
+
 
 /* ─── Responsive Redesign for Sidepanel Layout ──────────────────────────────── */
 @media (max-width: 768px) {

@@ -56,6 +56,15 @@ db.exec(`
   )
 `);
 
+// ─── budgets table ──────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS budgets (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_name  TEXT    NOT NULL UNIQUE,
+    monthly_amount REAL    NOT NULL CHECK(monthly_amount > 0)
+  )
+`);
+
 // ─── income_categories table ────────────────────────────────────────────────
 db.exec(`
   CREATE TABLE IF NOT EXISTS income_categories (

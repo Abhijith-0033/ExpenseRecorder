@@ -6,6 +6,7 @@ const analyticsRouter  = require('./routes/analytics');
 const incomeRouter     = require('./routes/income');
 const incomeCatsRouter = require('./routes/income_categories');
 const accountsRouter   = require('./routes/accounts');
+const budgetsRouter    = require('./routes/budgets');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,7 @@ app.use('/api', categoriesRouter);
 app.use('/api', incomeRouter);
 app.use('/api', incomeCatsRouter);
 app.use('/api', accountsRouter);
+app.use('/api', budgetsRouter);
 app.use('/api/analytics', analyticsRouter);
 
 

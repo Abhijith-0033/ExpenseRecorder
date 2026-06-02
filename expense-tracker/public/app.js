@@ -271,6 +271,9 @@ async function handleFormSubmit(e) {
     await loadSummary();
     showToast(wasEditing ? '✏️ Expense updated successfully!' : '✅ Expense added successfully!');
 
+    // Check budget after saving — warn if over budget (never blocks)
+    await checkBudgetAfterExpense(category);
+
   } catch (err) {
     formError.textContent = 'Network error. Please check the server is running.';
     console.error(err);
@@ -426,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-clear-filters')
     .addEventListener('click', clearFilters);
 
-  // ── New initialisation calls ──────────────────────────────────────────
+  // ── New initialisation calls ───────────────────────────────────────
   initTheme();             // initialise dark/light theme switch
   loadCategoryOptions();   // populate form + filter dropdowns from DB
   initPageRouter();        // wire up nav tab clicks
@@ -435,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAccounts();          // wire up accounts tab event listeners
   initAnalysis();          // wire up month prev/next + comparison selector
   initSettings();          // build color swatches + wire up add/delete buttons
+  initBudgets();           // load budget settings UI
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -709,6 +713,9 @@ async function refreshAnalysis() {
 
   // Load comparison chart separately (it uses its own n-months parameter)
   loadComparisonChart();
+
+  // Load budget overview progress bars (always current month)
+  loadBudgetOverview();
 }
 
 function renderCalendar(data) {
@@ -1231,6 +1238,7 @@ async function refreshSettings() {
   const categories = await fetchCategories();
   renderCategoriesList(categories);
   await refreshIncomeCategories();
+  await loadBudgetSettingsList();
 }
 
 function renderCategoriesList(categories) {
@@ -1521,6 +1529,242 @@ async function deleteCategory(id, name) {
     errorEl.classList.remove('hidden');
     console.error(err);
   }
+}
+
+// ─── Budget Module ────────────────────────────────────────────────────────────
+
+function initBudgets() {
+  loadBudgetSettingsList();
+}
+
+async function loadBudgetSettingsList() {
+  const container = document.getElementById('budgets-list');
+  if (!container) return;
+
+  try {
+    // Fetch categories + current budgets in parallel
+    const [catRes, budRes] = await Promise.all([
+      fetch('/api/categories'),
+      fetch('/api/budgets/status')
+    ]);
+    if (!catRes.ok || !budRes.ok) return;
+    const categories = await catRes.json();
+    const budgets    = await budRes.json();
+
+    // Build a quick lookup: category_name -> budget row
+    const budgetMap = {};
+    budgets.forEach(b => { budgetMap[b.category_name] = b; });
+
+    container.innerHTML = '';
+
+    categories.forEach(cat => {
+      const b    = budgetMap[cat.name];
+      const item = document.createElement('div');
+      item.className = 'budget-row';
+
+      // Left: colour dot + name
+      const left = document.createElement('div');
+      left.className = 'budget-row-left';
+
+      const dot = document.createElement('div');
+      dot.className = 'category-color-dot';
+      dot.style.background = cat.color;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className   = 'budget-cat-name';
+      nameSpan.textContent = cat.name;
+
+      left.appendChild(dot);
+      left.appendChild(nameSpan);
+
+      // Centre: mini progress bar (only if budget set)
+      const mid = document.createElement('div');
+      mid.className = 'budget-row-mid';
+      if (b) {
+        const pctCapped = Math.min(b.pct, 100);
+        const barColor  = b.over_budget ? 'var(--danger)' : b.pct >= 80 ? '#f7c56a' : 'var(--success)';
+
+        mid.innerHTML = `
+          <div class="budget-mini-track">
+            <div class="budget-mini-fill" style="width:${pctCapped}%;background:${barColor};"></div>
+          </div>
+          <span class="budget-mini-label ${b.over_budget ? 'budget-over' : ''}">
+            ${b.pct}% used · ₹${b.spent.toLocaleString('en-IN')} / ₹${b.monthly_amount.toLocaleString('en-IN')}
+          </span>`;
+      } else {
+        mid.innerHTML = '<span class="budget-mini-label" style="color:var(--text-muted);">No budget set</span>';
+      }
+
+      // Right: input + save/remove
+      const right = document.createElement('div');
+      right.className = 'budget-row-right';
+
+      const input = document.createElement('input');
+      input.type        = 'number';
+      input.className   = 'budget-amount-input';
+      input.placeholder = 'Amount (₹)';
+      input.min         = '1';
+      input.step        = '1';
+      if (b) input.value = b.monthly_amount;
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className   = 'btn-edit-cat';
+      saveBtn.textContent = b ? 'Update' : 'Set';
+      saveBtn.addEventListener('click', () => saveBudget(cat.name, input.value));
+
+      right.appendChild(input);
+      right.appendChild(saveBtn);
+
+      if (b) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className   = 'btn-delete-cat';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => removeBudget(b.id, cat.name));
+        right.appendChild(removeBtn);
+      }
+
+      item.appendChild(left);
+      item.appendChild(mid);
+      item.appendChild(right);
+      container.appendChild(item);
+    });
+  } catch (err) {
+    console.error('Error loading budget settings:', err);
+  }
+}
+
+async function saveBudget(categoryName, amountStr) {
+  const amount = Number(amountStr);
+  if (!amountStr || !isFinite(amount) || amount <= 0) {
+    showToast('Please enter a valid positive amount.', 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/api/budgets', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ category_name: categoryName, monthly_amount: amount })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Failed to save budget.', 'error'); return; }
+    showToast(`💰 Budget for "${categoryName}" set to ${formatCurrency(amount)}/month`);
+    await loadBudgetSettingsList();
+    await loadBudgetOverview();
+  } catch (err) {
+    showToast('Network error.', 'error');
+    console.error(err);
+  }
+}
+
+async function removeBudget(id, categoryName) {
+  if (!confirm(`Remove the budget for "${categoryName}"?`)) return;
+  try {
+    const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); showToast(d.error || 'Failed to remove.', 'error'); return; }
+    showToast(`🗑️ Budget for "${categoryName}" removed.`, 'info');
+    await loadBudgetSettingsList();
+    await loadBudgetOverview();
+  } catch (err) {
+    showToast('Network error.', 'error');
+    console.error(err);
+  }
+}
+
+// Called after every expense save — shows a warning toast if the category is over budget
+async function checkBudgetAfterExpense(category) {
+  try {
+    const res = await fetch(`/api/budgets/check/${encodeURIComponent(category)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.hasBudget) return;
+    if (data.over_budget) {
+      showToast(
+        `⚠️ Budget exceeded for <strong>${category}</strong>!<br>Spent ${formatCurrency(data.spent)} of ${formatCurrency(data.monthly_amount)} (${data.pct}%)`,
+        'error',
+        6000
+      );
+    } else if (data.pct >= 80) {
+      showToast(
+        `⚠️ ${category} budget at ${data.pct}% — ${formatCurrency(data.monthly_amount - data.spent)} remaining`,
+        'info',
+        5000
+      );
+    }
+    // Also refresh the analysis overview if visible
+    loadBudgetOverview();
+  } catch (_) { /* silent */ }
+}
+
+// ─── Budget Overview (Analysis Page) ─────────────────────────────────────────
+async function loadBudgetOverview() {
+  const list    = document.getElementById('budget-progress-list');
+  const empty   = document.getElementById('budget-overview-empty');
+  const monthEl = document.getElementById('budget-overview-month');
+  if (!list) return;
+
+  try {
+    const res = await fetch('/api/budgets/status');
+    if (!res.ok) return;
+    const budgets = await res.json();
+
+    // Month label
+    const now = new Date();
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    if (monthEl) monthEl.textContent = `${months[now.getMonth()]} ${now.getFullYear()}`;
+
+    if (budgets.length === 0) {
+      list.innerHTML = '';
+      if (empty) empty.style.display = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    renderBudgetProgressBars(list, budgets);
+  } catch (err) {
+    console.error('Error loading budget overview:', err);
+  }
+}
+
+function renderBudgetProgressBars(container, budgets) {
+  container.innerHTML = '';
+
+  budgets.forEach(b => {
+    const pctCapped = Math.min(b.pct, 100);
+    const isOver    = b.over_budget;
+    const isWarning = !isOver && b.pct >= 80;
+    const barColor  = isOver ? 'var(--danger)' : isWarning ? '#f7c56a' : 'var(--success)';
+    const statusLabel = isOver
+      ? `<span class="budget-status-badge budget-status-over">Over Budget</span>`
+      : isWarning
+        ? `<span class="budget-status-badge budget-status-warn">Near Limit</span>`
+        : '';
+
+    const row = document.createElement('div');
+    row.className = 'budget-progress-row';
+    row.innerHTML = `
+      <div class="budget-progress-header">
+        <span class="budget-progress-cat">${b.category_name}</span>
+        ${statusLabel}
+        <span class="budget-progress-pct" style="color:${barColor}">${b.pct}%</span>
+      </div>
+      <div class="budget-track">
+        <div class="budget-fill" style="width:0%;background:${barColor};" data-width="${pctCapped}"></div>
+      </div>
+      <div class="budget-progress-sub">
+        <span>Spent: <strong>${formatCurrency(b.spent)}</strong></span>
+        <span>Budget: <strong>${formatCurrency(b.monthly_amount)}</strong></span>
+        <span>${isOver ? 'Over by: <strong style="color:var(--danger)">' + formatCurrency(b.spent - b.monthly_amount) + '</strong>' : 'Remaining: <strong>' + formatCurrency(b.remaining) + '</strong>'}</span>
+      </div>`;
+    container.appendChild(row);
+  });
+
+  // Animate bars in after paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      container.querySelectorAll('.budget-fill').forEach(el => {
+        el.style.width = el.dataset.width + '%';
+      });
+    });
+  });
 }
 
 // ─── Income Categories Module ─────────────────────────────────────────────────
