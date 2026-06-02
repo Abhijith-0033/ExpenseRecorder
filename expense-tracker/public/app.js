@@ -374,10 +374,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-clear-filters')
     .addEventListener('click', clearFilters);
 
-  // ── New v2 initialisation calls ──────────────────────────────────────────
+  // ── New initialisation calls ──────────────────────────────────────────
+  initTheme();             // initialise dark/light theme switch
   loadCategoryOptions();   // populate form + filter dropdowns from DB
   initPageRouter();        // wire up nav tab clicks
-  initDashboard();         // wire up dashboard "View All" button
+  initDashboard();         // wire up dashboard elements
+  initIncome();            // wire up income tab event listeners
+  initAccounts();          // wire up accounts tab event listeners
   initAnalysis();          // wire up month prev/next + comparison selector
   initSettings();          // build color swatches + wire up add/delete buttons
 });
@@ -453,7 +456,9 @@ function initPageRouter() {
 
       // Trigger data loading for data-heavy pages
       if (page === 'dashboard') refreshDashboard();
+      if (page === 'income')    refreshIncome();
       if (page === 'analysis')  refreshAnalysis();
+      if (page === 'accounts')  refreshAccounts();
       if (page === 'settings')  refreshSettings();
     });
   });
@@ -474,6 +479,14 @@ async function refreshDashboard() {
     const res = await fetch('/api/analytics/overview');
     if (!res.ok) throw new Error('Failed to load overview');
     const data = await res.json();
+
+    // ── Update net balance & summary statistics ─────────────────────────────
+    document.getElementById('dash-net-balance').textContent =
+      formatCurrency(data.accountBalance);
+    document.getElementById('dash-month-income').textContent =
+      formatCurrency(data.monthly.income);
+    document.getElementById('dash-month-expense').textContent =
+      formatCurrency(data.monthly.total);
 
     // ── Update stat widgets ──────────────────────────────────────────────────
     document.getElementById('dash-daily-amount').textContent =
@@ -502,6 +515,9 @@ async function refreshDashboard() {
     if (!expRes.ok) throw new Error('Failed to load expenses');
     const allExpenses = await expRes.json();
     await renderDashboardRecent(allExpenses.slice(0, 5));
+
+    // ── Load Dashboard Cashflow Chart ───────────────────────────────────────
+    await loadDashboardCashflowChart();
 
   } catch (err) {
     console.error('Dashboard refresh error:', err);
@@ -600,6 +616,9 @@ function initAnalysis() {
   document.getElementById('comparison-months').addEventListener('change', () => {
     loadComparisonChart();
   });
+
+  // Initialize day detail modal interactions
+  initCalendarModal();
 }
 
 async function refreshAnalysis() {
@@ -624,6 +643,9 @@ async function refreshAnalysis() {
     document.getElementById('analysis-daily-total').textContent =
       `Total: ${formatCurrency(data.totalSpent)}`;
 
+    // Render Calendar
+    renderCalendar(data);
+
     // Render the three month-specific charts
     renderDailyChart(data);
     renderDonutChart(data);
@@ -636,6 +658,208 @@ async function refreshAnalysis() {
   // Load comparison chart separately (it uses its own n-months parameter)
   loadComparisonChart();
 }
+
+function renderCalendar(data) {
+  const grid = document.getElementById('analysis-calendar-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const year = data.year;
+  const month = data.month;
+
+  // Day of the week for the 1st of the month (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+  const firstDayIndex = new Date(year, month - 1, 1).getDay();
+
+  // Render empty filler cells for days of the week before the 1st
+  for (let i = 0; i < firstDayIndex; i++) {
+    const filler = document.createElement('div');
+    filler.className = 'cal-day empty';
+    grid.appendChild(filler);
+  }
+
+  // Find max daily spending to scale the color of the heat dot
+  const maxSpend = Math.max(...data.dailyTotals.map(d => d.total), 1);
+
+  // Render each day in the month
+  data.dailyTotals.forEach(dayInfo => {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if (dayInfo.total > 0) {
+      cell.classList.add('has-expense');
+    }
+
+    const headerRow = document.createElement('div');
+    headerRow.className = 'cal-day-header-row';
+
+    const numSpan = document.createElement('span');
+    numSpan.className = 'cal-day-num';
+    numSpan.textContent = dayInfo.day;
+    headerRow.appendChild(numSpan);
+
+    if (dayInfo.total > 0) {
+      const dot = document.createElement('span');
+      dot.className = 'cal-day-dot';
+      
+      // Calculate heat dot opacity/intensity
+      const ratio = dayInfo.total / maxSpend;
+      const opacity = 0.35 + ratio * 0.65;
+      dot.style.backgroundColor = `rgba(247, 112, 106, ${opacity})`;
+      dot.title = `₹${dayInfo.total.toFixed(2)}`;
+      headerRow.appendChild(dot);
+    }
+    cell.appendChild(headerRow);
+
+    const amountDiv = document.createElement('div');
+    amountDiv.className = 'cal-day-amount';
+    amountDiv.textContent = dayInfo.total > 0 ? `₹${Math.round(dayInfo.total).toLocaleString('en-IN')}` : '';
+    cell.appendChild(amountDiv);
+
+    cell.addEventListener('click', () => {
+      openCalendarModal(year, month, dayInfo.day);
+    });
+
+    grid.appendChild(cell);
+  });
+}
+
+async function openCalendarModal(year, month, day) {
+  const modal = document.getElementById('calendar-modal');
+  const title = document.getElementById('modal-date-title');
+  const totalAmount = document.getElementById('modal-total-amount');
+  const expenseCount = document.getElementById('modal-expense-count');
+  const categoryBreakdown = document.getElementById('modal-category-breakdown');
+  const txList = document.getElementById('modal-tx-list');
+
+  // Format date header
+  const monthNames = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
+  ];
+  title.textContent = `${day} ${monthNames[month - 1]} ${year}`;
+
+  // Reset/Loading state
+  totalAmount.textContent = '₹0.00';
+  expenseCount.textContent = 'Loading...';
+  categoryBreakdown.innerHTML = '';
+  txList.innerHTML = '<div class="modal-tx-empty">Loading transactions...</div>';
+
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/analytics/daily-expenses?year=${year}&month=${month}&day=${day}`);
+    if (!res.ok) throw new Error('Failed to fetch day details');
+    const data = await res.json();
+
+    // Populate total & count
+    totalAmount.textContent = formatCurrency(data.total);
+    expenseCount.textContent = `${data.count} expense${data.count === 1 ? '' : 's'}`;
+
+    // Populate category breakdown
+    categoryBreakdown.innerHTML = '';
+    if (data.categoryBreakdown.length === 0) {
+      categoryBreakdown.innerHTML = '<span style="color: var(--text-muted); font-size: 0.85rem;">No expenses on this day.</span>';
+    } else {
+      data.categoryBreakdown.forEach(c => {
+        const pill = document.createElement('div');
+        pill.className = 'modal-cat-pill';
+        
+        const dot = document.createElement('span');
+        dot.className = 'modal-cat-pill-dot';
+        dot.style.backgroundColor = c.color;
+        
+        const text = document.createElement('span');
+        text.textContent = `${c.category}: `;
+        
+        const val = document.createElement('span');
+        val.className = 'modal-cat-pill-amount';
+        val.textContent = formatCurrency(c.total);
+        
+        pill.appendChild(dot);
+        pill.appendChild(text);
+        pill.appendChild(val);
+        categoryBreakdown.appendChild(pill);
+      });
+    }
+
+    // Populate transaction list
+    txList.innerHTML = '';
+    if (data.expenses.length === 0) {
+      txList.innerHTML = '<div class="modal-tx-empty">No transactions recorded for this day.</div>';
+    } else {
+      const colorMap = {};
+      data.categoryBreakdown.forEach(c => {
+        colorMap[c.category] = c.color;
+      });
+
+      data.expenses.forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'modal-tx-item';
+
+        const left = document.createElement('div');
+        left.className = 'modal-tx-left';
+
+        const dot = document.createElement('div');
+        dot.className = 'modal-tx-dot';
+        dot.style.backgroundColor = colorMap[e.category] || '#8888a0';
+
+        const details = document.createElement('div');
+        details.className = 'modal-tx-details';
+
+        const t = document.createElement('div');
+        t.className = 'modal-tx-title';
+        t.textContent = e.title;
+
+        const sub = document.createElement('div');
+        sub.className = 'modal-tx-subtitle';
+        sub.textContent = `${e.category}${e.account_name ? ' · ' + e.account_name : ''}${e.note ? ' · ' + e.note : ''}`;
+
+        details.appendChild(t);
+        details.appendChild(sub);
+        left.appendChild(dot);
+        left.appendChild(details);
+
+        const amt = document.createElement('div');
+        amt.className = 'modal-tx-amount';
+        amt.textContent = `-${formatCurrency(e.amount)}`;
+
+        item.appendChild(left);
+        item.appendChild(amt);
+        txList.appendChild(item);
+      });
+    }
+  } catch (err) {
+    console.error('Failed to load daily calendar details:', err);
+    expenseCount.textContent = 'Error loading data';
+    txList.innerHTML = '<div class="modal-tx-empty" style="color: var(--danger);">Failed to load daily details.</div>';
+  }
+}
+
+function initCalendarModal() {
+  const modal = document.getElementById('calendar-modal');
+  if (!modal) return;
+  const closeBtn = document.getElementById('modal-close-btn');
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+  }
+
+  // Close when clicking overlay backdrop
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+    }
+  });
+
+  // Close on Escape key press
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      modal.classList.add('hidden');
+    }
+  });
+}
+
 
 // Destroys an existing Chart.js instance before redrawing (required by Chart.js)
 function destroyChart(key) {
@@ -1068,3 +1292,717 @@ async function deleteCategory(id, name) {
     console.error(err);
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENTERPRISE SUITE 3.0 ADDITIONS — Theme Toggle, Income & Accounts Management
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ─── Theme Management ────────────────────────────────────────────────────────
+
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  if (saved === 'light') {
+    document.documentElement.classList.add('light-theme');
+  } else {
+    document.documentElement.classList.remove('light-theme');
+  }
+
+  // Update chart variables based on initial theme
+  applyChartThemeSettings();
+
+  const toggleBtn = document.getElementById('btn-theme-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      document.documentElement.classList.toggle('light-theme');
+      const currentTheme = document.documentElement.classList.contains('light-theme') ? 'light' : 'dark';
+      localStorage.setItem('theme', currentTheme);
+      
+      // Update charts defaults and redraw active charts
+      applyChartThemeSettings();
+    });
+  }
+}
+
+function applyChartThemeSettings() {
+  if (typeof Chart === 'undefined') return;
+  const isLight = document.documentElement.classList.contains('light-theme');
+  Chart.defaults.color       = isLight ? '#4b5563' : '#8888a0';
+  Chart.defaults.borderColor = isLight ? '#e5e7eb' : '#2e2e3e';
+
+  // Redraw charts if we are on Dashboard or Analysis
+  const activeMenu = document.querySelector('.menu-item.active');
+  if (activeMenu) {
+    const page = activeMenu.dataset.page;
+    if (page === 'dashboard') {
+      loadDashboardCashflowChart();
+    } else if (page === 'analysis') {
+      refreshAnalysis();
+    }
+  }
+}
+
+// ─── Dashboard Cashflow Chart ────────────────────────────────────────────────
+
+const dashboardState = {
+  charts: {
+    cashflow: null
+  }
+};
+
+async function loadDashboardCashflowChart() {
+  const canvas = document.getElementById('chart-dash-cashflow');
+  if (!canvas) return;
+
+  try {
+    const res = await fetch('/api/analytics/cashflow?months=6');
+    if (!res.ok) throw new Error('Failed to load cashflow data');
+    const data = await res.json();
+
+    const isLight = document.documentElement.classList.contains('light-theme');
+
+    if (dashboardState.charts.cashflow) {
+      dashboardState.charts.cashflow.destroy();
+      dashboardState.charts.cashflow = null;
+    }
+
+    dashboardState.charts.cashflow = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: data.months.map(m => m.label),
+        datasets: [
+          {
+            label: 'Income (₹)',
+            data: data.months.map(m => m.income),
+            backgroundColor: isLight ? 'rgba(56, 161, 105, 0.75)' : 'rgba(106, 247, 160, 0.65)',
+            borderColor: isLight ? '#38a169' : '#6af7a0',
+            borderWidth: 1,
+            borderRadius: 4
+          },
+          {
+            label: 'Expenses (₹)',
+            data: data.months.map(m => m.expenses),
+            backgroundColor: isLight ? 'rgba(95, 90, 247, 0.75)' : 'rgba(124, 106, 247, 0.65)',
+            borderColor: '#7c6af7',
+            borderWidth: 1,
+            borderRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: isLight ? '#1a1a2e' : '#8888a0',
+              font: { size: 11 },
+              boxWidth: 12
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: ${formatCurrency(ctx.raw)}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: isLight ? '#4b5563' : '#8888a0', font: { size: 10 } },
+            grid: { color: isLight ? '#e5e7eb' : '#2e2e3e' }
+          },
+          y: {
+            ticks: {
+              color: isLight ? '#4b5563' : '#8888a0',
+              font: { size: 10 },
+              callback: val => '₹' + val.toLocaleString('en-IN')
+            },
+            grid: { color: isLight ? '#e5e7eb' : '#2e2e3e' },
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Dashboard cashflow chart error:', err);
+  }
+}
+
+// ─── Income Module ───────────────────────────────────────────────────────────
+
+const incomeState = {
+  income: [],
+  editingId: null,
+  filters: {
+    category: '',
+    from: '',
+    to: '',
+    search: '',
+    account_id: ''
+  }
+};
+
+const INCOME_CATEGORY_COLORS = {
+  Salary:     '#38a169',
+  Freelance:  '#3182ce',
+  Investment: '#dd6b20',
+  Gift:       '#e53e3e',
+  Other:      '#718096'
+};
+
+function initIncome() {
+  const form = document.getElementById('income-form');
+  if (form) {
+    form.addEventListener('submit', handleIncomeFormSubmit);
+  }
+
+  const cancelBtn = document.getElementById('btn-income-cancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', cancelIncomeEdit);
+  }
+
+  const filterCategory = document.getElementById('filter-income-category');
+  if (filterCategory) {
+    filterCategory.addEventListener('change', onIncomeFilterChange);
+  }
+
+  const filterFrom = document.getElementById('filter-income-from');
+  if (filterFrom) {
+    filterFrom.addEventListener('change', onIncomeFilterChange);
+  }
+
+  const filterTo = document.getElementById('filter-income-to');
+  if (filterTo) {
+    filterTo.addEventListener('change', onIncomeFilterChange);
+  }
+
+  const filterSearch = document.getElementById('filter-income-search');
+  if (filterSearch) {
+    filterSearch.addEventListener('input', debounce(onIncomeFilterChange, 300));
+  }
+
+  const clearBtn = document.getElementById('btn-clear-income-filters');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearIncomeFilters);
+  }
+}
+
+function onIncomeFilterChange() {
+  incomeState.filters.category = document.getElementById('filter-income-category').value;
+  incomeState.filters.from     = document.getElementById('filter-income-from').value;
+  incomeState.filters.to       = document.getElementById('filter-income-to').value;
+  incomeState.filters.search   = document.getElementById('filter-income-search').value.trim();
+  loadIncome();
+}
+
+function clearIncomeFilters() {
+  document.getElementById('filter-income-category').value = '';
+  document.getElementById('filter-income-from').value     = '';
+  document.getElementById('filter-income-to').value       = '';
+  document.getElementById('filter-income-search').value   = '';
+
+  incomeState.filters.category = '';
+  incomeState.filters.from     = '';
+  incomeState.filters.to       = '';
+  incomeState.filters.search   = '';
+
+  loadIncome();
+}
+
+async function refreshIncome() {
+  document.getElementById('field-income-date').value = getTodayString();
+  await loadAccountSelectOptions();
+  await loadIncome();
+  await loadIncomeSummary();
+}
+
+async function loadAccountSelectOptions() {
+  try {
+    const res = await fetch('/api/accounts');
+    if (!res.ok) return;
+    const accounts = await res.json();
+
+    const select = document.getElementById('field-income-account');
+    if (select) {
+      select.innerHTML = '';
+      accounts.forEach(acc => {
+        const opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = `${acc.name} (Current: ${formatCurrency(acc.balance)})`;
+        select.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error('Error loading account select options:', err);
+  }
+}
+
+async function loadIncome() {
+  const params = new URLSearchParams();
+  if (incomeState.filters.category) params.set('category', incomeState.filters.category);
+  if (incomeState.filters.from)     params.set('from', incomeState.filters.from);
+  if (incomeState.filters.to)       params.set('to', incomeState.filters.to);
+  if (incomeState.filters.search)   params.set('search', incomeState.filters.search);
+
+  try {
+    const res = await fetch('/api/income?' + params.toString());
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('Failed to load income:', data.error);
+      return;
+    }
+    incomeState.income = data;
+    renderIncomeList();
+  } catch (err) {
+    console.error('Network error loading income:', err);
+  }
+}
+
+function renderIncomeList() {
+  const tbody = document.getElementById('income-list');
+  const emptyState = document.getElementById('income-empty-state');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+
+  if (incomeState.income.length === 0) {
+    emptyState.style.display = 'block';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  incomeState.income.forEach(inc => {
+    const tr = document.createElement('tr');
+
+    const tdDate = document.createElement('td');
+    tdDate.className = 'date-cell';
+    tdDate.textContent = formatDate(inc.date);
+    tr.appendChild(tdDate);
+
+    const tdTitle = document.createElement('td');
+    tdTitle.textContent = inc.title;
+    tr.appendChild(tdTitle);
+
+    const tdCat = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.style.backgroundColor = 'rgba(56,161,105,0.12)';
+    badge.style.color = INCOME_CATEGORY_COLORS[inc.category] || '#38a169';
+    badge.textContent = inc.category;
+    tdCat.appendChild(badge);
+    tr.appendChild(tdCat);
+
+    const tdAmount = document.createElement('td');
+    tdAmount.className = 'amount-cell';
+    tdAmount.style.color = 'var(--success)';
+    tdAmount.textContent = '+' + formatCurrency(inc.amount);
+    tr.appendChild(tdAmount);
+
+    const tdNote = document.createElement('td');
+    tdNote.className = 'note-cell';
+    const noteText = inc.note || '';
+    tdNote.textContent = noteText.length > 30 ? noteText.slice(0, 30) + '...' : noteText;
+    if (noteText) tdNote.setAttribute('title', noteText);
+    tr.appendChild(tdNote);
+
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions-cell';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-edit';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => startIncomeEdit(inc.id));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => deleteIncome(inc.id));
+
+    tdActions.appendChild(editBtn);
+    tdActions.appendChild(deleteBtn);
+    tr.appendChild(tdActions);
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadIncomeSummary() {
+  try {
+    const res = await fetch('/api/income/summary');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const monthLabelEl = document.getElementById('income-summary-month');
+    if (monthLabelEl) monthLabelEl.textContent = data.month;
+
+    const totalEl = document.getElementById('income-summary-total');
+    if (totalEl) totalEl.textContent = formatCurrency(data.totalIncome);
+
+    const container = document.getElementById('income-summary-breakdown');
+    if (!container) return;
+    container.innerHTML = '';
+
+    data.breakdown.forEach(item => {
+      const pct = data.totalIncome > 0
+        ? ((item.total / data.totalIncome) * 100).toFixed(1)
+        : 0;
+      const color = INCOME_CATEGORY_COLORS[item.category] || '#38a169';
+
+      const row = document.createElement('div');
+      row.className = 'breakdown-row';
+
+      const label = document.createElement('span');
+      label.className = 'breakdown-label';
+      label.textContent = item.category;
+
+      const track = document.createElement('div');
+      track.className = 'breakdown-bar-track';
+
+      const fill = document.createElement('div');
+      fill.className = 'breakdown-bar-fill';
+      fill.style.backgroundColor = color;
+      fill.style.width = '0%';
+
+      track.appendChild(fill);
+
+      const amountSpan = document.createElement('span');
+      amountSpan.className = 'breakdown-amount';
+      amountSpan.textContent = formatCurrency(item.total);
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(amountSpan);
+      container.appendChild(row);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fill.style.width = pct + '%';
+        });
+      });
+    });
+  } catch (err) {
+    console.error('Error loading income summary:', err);
+  }
+}
+
+async function handleIncomeFormSubmit(e) {
+  e.preventDefault();
+  const formError = document.getElementById('income-form-error');
+
+  const title      = document.getElementById('field-income-title').value.trim();
+  const amount     = document.getElementById('field-income-amount').value;
+  const category   = document.getElementById('field-income-category').value;
+  const date       = document.getElementById('field-income-date').value;
+  const account_id = document.getElementById('field-income-account').value;
+  const note       = document.getElementById('field-income-note').value.trim();
+
+  if (!title) {
+    formError.textContent = 'Title is required.';
+    return;
+  }
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    formError.textContent = 'Please enter a valid positive amount.';
+    return;
+  }
+  if (!category) {
+    formError.textContent = 'Please select a category.';
+    return;
+  }
+  if (!date) {
+    formError.textContent = 'Please select a date.';
+    return;
+  }
+  if (!account_id) {
+    formError.textContent = 'Please select an account.';
+    return;
+  }
+
+  formError.textContent = '';
+  const payload = { title, amount: Number(amount), category, date, account_id: Number(account_id), note };
+
+  try {
+    let res;
+    if (incomeState.editingId !== null) {
+      res = await fetch(`/api/income/${incomeState.editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch('/api/income', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      formError.textContent = data.error || 'An error occurred. Please try again.';
+      return;
+    }
+
+    if (incomeState.editingId !== null) {
+      cancelIncomeEdit();
+    } else {
+      document.getElementById('income-form').reset();
+      document.getElementById('field-income-date').value = getTodayString();
+    }
+
+    await refreshIncome();
+  } catch (err) {
+    formError.textContent = 'Network error. Please check the server.';
+    console.error(err);
+  }
+}
+
+function startIncomeEdit(id) {
+  const inc = incomeState.income.find(i => i.id === id);
+  if (!inc) return;
+
+  document.getElementById('field-income-title').value      = inc.title;
+  document.getElementById('field-income-amount').value     = inc.amount;
+  document.getElementById('field-income-category').value   = inc.category;
+  document.getElementById('field-income-date').value       = inc.date;
+  document.getElementById('field-income-account').value    = inc.account_id;
+  document.getElementById('field-income-note').value        = inc.note || '';
+
+  incomeState.editingId = id;
+
+  document.getElementById('income-form-heading').textContent = 'Edit Income';
+  document.getElementById('btn-income-submit').textContent    = 'Update Income';
+  document.getElementById('btn-income-cancel').style.display  = 'inline-flex';
+  document.getElementById('income-form-error').textContent    = '';
+
+  document.getElementById('income-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelIncomeEdit() {
+  document.getElementById('income-form').reset();
+  document.getElementById('field-income-date').value = getTodayString();
+
+  incomeState.editingId = null;
+
+  document.getElementById('income-form-heading').textContent = 'Add Income';
+  document.getElementById('btn-income-submit').textContent    = 'Add Income';
+  document.getElementById('btn-income-cancel').style.display  = 'none';
+  document.getElementById('income-form-error').textContent    = '';
+}
+
+async function deleteIncome(id) {
+  const confirmed = window.confirm('Delete this income entry? This will update account balances.');
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(`/api/income/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || 'Failed to delete income.');
+      return;
+    }
+    await refreshIncome();
+  } catch (err) {
+    alert('Network error.');
+    console.error(err);
+  }
+}
+
+// ─── Accounts Module ─────────────────────────────────────────────────────────
+
+const accountsState = {
+  accounts: [],
+  editingId: null
+};
+
+function initAccounts() {
+  const form = document.getElementById('account-form');
+  if (form) {
+    form.addEventListener('submit', handleAccountFormSubmit);
+  }
+  const cancelBtn = document.getElementById('btn-account-cancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', cancelAccountEdit);
+  }
+}
+
+async function refreshAccounts() {
+  try {
+    const res = await fetch('/api/accounts');
+    if (!res.ok) throw new Error('Failed to load accounts');
+    const accounts = await res.json();
+    accountsState.accounts = accounts;
+
+    renderAccountsGrid(accounts);
+
+    // Prepopulate form with the Main Account for ease of balance configuration
+    if (accounts.length > 0) {
+      const mainAcc = accounts[0];
+      const activeEl = document.activeElement;
+      const isFocused = activeEl && (activeEl.id === 'field-account-name' || activeEl.id === 'field-account-initial');
+      
+      // If we are not actively typing in the inputs, safely populate/sync them
+      if (!isFocused) {
+        document.getElementById('field-account-name').value = mainAcc.name;
+        document.getElementById('field-account-initial').value = mainAcc.initial_balance;
+        accountsState.editingId = mainAcc.id;
+        document.getElementById('account-form-title').textContent = `Manage Account: ${mainAcc.name}`;
+        document.getElementById('btn-account-submit').textContent = 'Save Account Settings';
+      }
+    }
+  } catch (err) {
+    console.error('Error refreshing accounts:', err);
+  }
+}
+
+
+function renderAccountsGrid(accounts) {
+  const grid = document.getElementById('accounts-cards-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  accounts.forEach(acc => {
+    const card = document.createElement('div');
+    card.className = 'account-card';
+
+    const header = document.createElement('div');
+    header.className = 'account-card-header';
+
+    const name = document.createElement('span');
+    name.className = 'account-card-name';
+    name.textContent = acc.name;
+
+    header.appendChild(name);
+
+    const balance = document.createElement('div');
+    balance.className = 'account-card-balance';
+    balance.textContent = formatCurrency(acc.balance);
+
+    const details = document.createElement('div');
+    details.className = 'account-card-details';
+
+    const rowInit = createDetailRow('Initial Balance', formatCurrency(acc.initial_balance));
+    const rowInc  = createDetailRow('Total Income (+)', formatCurrency(acc.total_income));
+    const rowExp  = createDetailRow('Total Expenses (-)', formatCurrency(acc.total_expenses));
+
+    details.appendChild(rowInit);
+    details.appendChild(rowInc);
+    details.appendChild(rowExp);
+
+    card.appendChild(header);
+    card.appendChild(balance);
+    card.appendChild(details);
+
+    // Edit settings option
+    const actions = document.createElement('div');
+    actions.className = 'account-card-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn-edit';
+    editBtn.textContent = 'Edit Balance';
+    editBtn.addEventListener('click', () => startAccountEdit(acc));
+    actions.appendChild(editBtn);
+
+    card.appendChild(actions);
+    grid.appendChild(card);
+  });
+}
+
+function createDetailRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'account-detail-row';
+
+  const lbl = document.createElement('span');
+  lbl.textContent = label;
+
+  const val = document.createElement('span');
+  val.className = 'account-detail-val';
+  val.textContent = value;
+
+  row.appendChild(lbl);
+  row.appendChild(val);
+  return row;
+}
+
+function startAccountEdit(acc) {
+  document.getElementById('field-account-name').value = acc.name;
+  document.getElementById('field-account-initial').value = acc.initial_balance;
+  accountsState.editingId = acc.id;
+
+  document.getElementById('account-form-title').textContent = `Edit Settings: ${acc.name}`;
+  document.getElementById('btn-account-submit').textContent = 'Update Account settings';
+  document.getElementById('btn-account-cancel').style.display = 'inline-flex';
+
+  document.getElementById('account-editor-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelAccountEdit() {
+  document.getElementById('account-form').reset();
+  accountsState.editingId = null;
+
+  document.getElementById('account-form-title').textContent = 'Account Settings';
+  document.getElementById('btn-account-submit').textContent = 'Save Account';
+  document.getElementById('btn-account-cancel').style.display = 'none';
+
+  document.getElementById('account-form-error').textContent = '';
+  document.getElementById('account-form-success').textContent = '';
+  
+  // Re-run refresh to select the default account again
+  refreshAccounts();
+}
+
+async function handleAccountFormSubmit(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById('account-form-error');
+  const successEl = document.getElementById('account-form-success');
+
+  errorEl.textContent = '';
+  successEl.textContent = '';
+
+  const name = document.getElementById('field-account-name').value.trim();
+  const initial_balance = Number(document.getElementById('field-account-initial').value);
+
+  if (!name) {
+    errorEl.textContent = 'Account name cannot be empty.';
+    return;
+  }
+  if (isNaN(initial_balance) || initial_balance < 0) {
+    errorEl.textContent = 'Initial balance must be a non-negative number.';
+    return;
+  }
+
+  const payload = { name, initial_balance };
+
+  try {
+    let res;
+    if (accountsState.editingId !== null) {
+      res = await fetch(`/api/accounts/${accountsState.editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.error || 'Failed to save account settings.';
+      return;
+    }
+
+    successEl.textContent = 'Account settings saved successfully!';
+    setTimeout(() => { successEl.textContent = ''; }, 3000);
+
+    // Cancel edit state to reload first account defaults
+    cancelAccountEdit();
+  } catch (err) {
+    errorEl.textContent = 'Error saving account settings. Check connection.';
+    console.error(err);
+  }
+}
+

@@ -3,6 +3,8 @@ const path             = require('path');
 const expensesRouter   = require('./routes/expenses');
 const categoriesRouter = require('./routes/categories');
 const analyticsRouter  = require('./routes/analytics');
+const incomeRouter     = require('./routes/income');
+const accountsRouter   = require('./routes/accounts');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -11,7 +13,10 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api', expensesRouter);
 app.use('/api', categoriesRouter);
+app.use('/api', incomeRouter);
+app.use('/api', accountsRouter);
 app.use('/api/analytics', analyticsRouter);
+
 
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Not found' });

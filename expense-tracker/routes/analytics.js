@@ -67,36 +67,66 @@ router.get('/overview', (req, res) => {
     const monthStartStr = `${year}-${monthStr}-01`;
     const monthEndStr   = `${year}-${monthStr}-${String(last).padStart(2, '0')}`;
 
-    // Query daily
+    // Query daily expenses
     const dailyRow = db.prepare(
       `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
        FROM expenses WHERE date = ?`
     ).get(todayStr);
 
-    // Query weekly
+    // Query daily income
+    const dailyIncomeRow = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+       FROM income WHERE date = ?`
+    ).get(todayStr);
+
+    // Query weekly expenses
     const weeklyRow = db.prepare(
       `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
        FROM expenses WHERE date BETWEEN ? AND ?`
     ).get(weekStartStr, weekEndStr);
 
-    // Query monthly
+    // Query weekly income
+    const weeklyIncomeRow = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+       FROM income WHERE date BETWEEN ? AND ?`
+    ).get(weekStartStr, weekEndStr);
+
+    // Query monthly expenses
     const monthlyRow = db.prepare(
       `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
        FROM expenses WHERE date BETWEEN ? AND ?`
     ).get(monthStartStr, monthEndStr);
 
+    // Query monthly income
+    const monthlyIncomeRow = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+       FROM income WHERE date BETWEEN ? AND ?`
+    ).get(monthStartStr, monthEndStr);
+
+    // Compute net balance across all accounts
+    const initialAccRow = db.prepare('SELECT COALESCE(SUM(initial_balance), 0) as total FROM accounts').get();
+    const allIncomeRow  = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM income').get();
+    const allExpenseRow = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM expenses').get();
+    const accountBalance = Number(initialAccRow.total) + Number(allIncomeRow.total) - Number(allExpenseRow.total);
+
     res.json({
       daily: {
         total: Number(Number(dailyRow.total).toFixed(2)),
-        count: dailyRow.count
+        count: dailyRow.count,
+        income: Number(Number(dailyIncomeRow.total).toFixed(2)),
+        incomeCount: dailyIncomeRow.count
       },
       weekly: {
         total: Number(Number(weeklyRow.total).toFixed(2)),
-        count: weeklyRow.count
+        count: weeklyRow.count,
+        income: Number(Number(weeklyIncomeRow.total).toFixed(2)),
+        incomeCount: weeklyIncomeRow.count
       },
       monthly: {
         total: Number(Number(monthlyRow.total).toFixed(2)),
-        count: monthlyRow.count
+        count: monthlyRow.count,
+        income: Number(Number(monthlyIncomeRow.total).toFixed(2)),
+        incomeCount: monthlyIncomeRow.count
       },
       date: {
         today:      todayStr,
@@ -104,7 +134,8 @@ router.get('/overview', (req, res) => {
         weekEnd:    weekEndStr,
         monthStart: monthStartStr,
         monthEnd:   monthEndStr
-      }
+      },
+      accountBalance: Number(accountBalance.toFixed(2))
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -268,4 +299,129 @@ router.get('/comparison', (req, res) => {
   }
 });
 
+// ─── GET /api/analytics/cashflow?months=N ─────────────────────────────────────
+router.get('/cashflow', (req, res) => {
+  try {
+    let n = parseInt(req.query.months || '6', 10);
+    if (isNaN(n) || n < 2 || n > 12) {
+      n = 6;
+    }
+
+    const now     = new Date();
+    const results = [];
+
+    for (let i = n - 1; i >= 0; i--) {
+      const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const y     = d.getFullYear();
+      const m     = d.getMonth() + 1;
+      const mStr  = String(m).padStart(2, '0');
+      const last  = lastDayOfMonth(y, m);
+      const from  = `${y}-${mStr}-01`;
+      const to    = `${y}-${mStr}-${String(last).padStart(2, '0')}`;
+      const label = `${SHORT_MONTH_NAMES[m - 1]} ${y}`;
+
+      const expRow = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date BETWEEN ? AND ?`
+      ).get(from, to);
+
+      const incRow = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE date BETWEEN ? AND ?`
+      ).get(from, to);
+
+      results.push({
+        label,
+        year:     y,
+        month:    m,
+        expenses: Number(Number(expRow.total).toFixed(2)),
+        income:   Number(Number(incRow.total).toFixed(2))
+      });
+    }
+
+    res.json({ months: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── GET /api/analytics/daily-expenses?year=YYYY&month=MM&day=DD ──────────────
+router.get('/daily-expenses', (req, res) => {
+  try {
+    const { year, month, day } = req.query;
+    if (!year || !month || !day) {
+      return res.status(400).json({ error: 'year, month, and day are required.' });
+    }
+
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    const d = parseInt(day, 10);
+
+    if (isNaN(y) || y < 2000 || y > 2100) {
+      return res.status(400).json({ error: 'Invalid year.' });
+    }
+    if (isNaN(m) || m < 1 || m > 12) {
+      return res.status(400).json({ error: 'Invalid month.' });
+    }
+    if (isNaN(d) || d < 1 || d > 31) {
+      return res.status(400).json({ error: 'Invalid day.' });
+    }
+
+    const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+    // Get all expenses on this day
+    const expenses = db.prepare(
+      `SELECT e.*, a.name as account_name
+       FROM expenses e
+       LEFT JOIN accounts a ON e.account_id = a.id
+       WHERE e.date = ?
+       ORDER BY e.id DESC`
+    ).all(dateStr);
+
+    // Calculate total and count
+    const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const count = expenses.length;
+
+    // Get categories with colors
+    const categories = db.prepare('SELECT name, color FROM categories').all();
+    const catColorMap = {};
+    for (const cat of categories) {
+      catColorMap[cat.name] = cat.color;
+    }
+
+    // Group by category for breakdown
+    const catMap = {};
+    for (const exp of expenses) {
+      if (!catMap[exp.category]) {
+        catMap[exp.category] = {
+          category: exp.category,
+          total: 0,
+          count: 0,
+          color: catColorMap[exp.category] || '#8888a0'
+        };
+      }
+      catMap[exp.category].total += exp.amount;
+      catMap[exp.category].count += 1;
+    }
+
+    const categoryBreakdown = Object.values(catMap).map(c => {
+      c.total = Number(c.total.toFixed(2));
+      return c;
+    });
+
+    // Sort category breakdown by total descending
+    categoryBreakdown.sort((a, b) => b.total - a.total);
+
+    res.json({
+      date: dateStr,
+      total: Number(total.toFixed(2)),
+      count,
+      expenses,
+      categoryBreakdown
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+
+

@@ -3,20 +3,25 @@ const Database = require('better-sqlite3');
 const db = new Database('expenses.db');
 
 db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
 
 // ─── expenses table ───────────────────────────────────────────────────────────
-// NOTE: We drop the CHECK constraint on category so custom categories work.
-// The category column is still NOT NULL — validation happens in route layer.
 db.exec(`
   CREATE TABLE IF NOT EXISTS expenses (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    title     TEXT    NOT NULL CHECK(length(trim(title)) > 0),
-    amount    REAL    NOT NULL CHECK(amount > 0),
-    category  TEXT    NOT NULL,
-    date      TEXT    NOT NULL,
-    note      TEXT    NOT NULL DEFAULT ''
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT    NOT NULL CHECK(length(trim(title)) > 0),
+    amount     REAL    NOT NULL CHECK(amount > 0),
+    category   TEXT    NOT NULL,
+    date       TEXT    NOT NULL,
+    note       TEXT    NOT NULL DEFAULT '',
+    account_id INTEGER NOT NULL DEFAULT 1
   )
 `);
+
+// Migrate existing expenses table: add account_id column if it doesn't exist
+try {
+  db.exec(`ALTER TABLE expenses ADD COLUMN account_id INTEGER NOT NULL DEFAULT 1`);
+} catch (_) { /* column already exists — safe to ignore */ }
 
 // ─── categories table ─────────────────────────────────────────────────────────
 db.exec(`
@@ -28,9 +33,32 @@ db.exec(`
   )
 `);
 
+// ─── accounts table ───────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS accounts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE CHECK(length(trim(name)) > 0),
+    initial_balance REAL    NOT NULL DEFAULT 0,
+    created_at      TEXT    NOT NULL DEFAULT (date('now'))
+  )
+`);
+
+// ─── income table ─────────────────────────────────────────────────────────────
+db.exec(`
+  CREATE TABLE IF NOT EXISTS income (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT    NOT NULL CHECK(length(trim(title)) > 0),
+    amount     REAL    NOT NULL CHECK(amount > 0),
+    account_id INTEGER NOT NULL DEFAULT 1,
+    category   TEXT    NOT NULL DEFAULT 'Other',
+    date       TEXT    NOT NULL,
+    note       TEXT    NOT NULL DEFAULT ''
+  )
+`);
+
 // ─── Seed built-in categories (only runs if the table is empty) ───────────────
-const count = db.prepare('SELECT COUNT(*) as n FROM categories').get();
-if (count.n === 0) {
+const catCount = db.prepare('SELECT COUNT(*) as n FROM categories').get();
+if (catCount.n === 0) {
   const defaults = [
     { name: 'Food',          color: '#f7706a', is_default: 1 },
     { name: 'Transport',     color: '#6a9ef7', is_default: 1 },
@@ -45,6 +73,14 @@ if (count.n === 0) {
   for (const c of defaults) {
     insert.run(c.name, c.color, c.is_default);
   }
+}
+
+// ─── Seed default account (only runs if the table is empty) ──────────────────
+const accCount = db.prepare('SELECT COUNT(*) as n FROM accounts').get();
+if (accCount.n === 0) {
+  db.prepare(
+    'INSERT INTO accounts (name, initial_balance) VALUES (?, ?)'
+  ).run('Main Account', 0);
 }
 
 module.exports = db;

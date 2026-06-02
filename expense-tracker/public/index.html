@@ -31,9 +31,17 @@
           <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           <span>Expenses</span>
         </button>
+        <button class="menu-item" data-page="income">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          <span>Income</span>
+        </button>
         <button class="menu-item" data-page="analysis">
           <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
           <span>Analysis</span>
+        </button>
+        <button class="menu-item" data-page="accounts">
+          <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/><path d="M3 14h3"/></svg>
+          <span>Accounts</span>
         </button>
         <button class="menu-item" data-page="settings">
           <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -56,6 +64,10 @@
           <span class="header-badge">Suite 2.0</span>
         </div>
         <div class="header-right">
+          <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" aria-label="Toggle Theme">
+            <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
           <div class="user-profile">
             <div class="user-avatar">A</div>
             <div class="user-info">
@@ -244,20 +256,39 @@
   ════════════════════════════════════════════════════════════════ -->
   <div class="page hidden" id="page-dashboard">
 
+    <!-- Hero Balance Block -->
+    <div class="hero-balance-card card">
+      <div class="balance-left">
+        <span class="balance-label">Total Net Balance</span>
+        <h2 id="dash-net-balance" class="balance-val">₹0.00</h2>
+        <span class="balance-sub">Across all accounts</span>
+      </div>
+      <div class="balance-right">
+        <div class="balance-stat">
+          <span class="stat-lbl">Income (This Month)</span>
+          <span id="dash-month-income" class="stat-val positive">₹0.00</span>
+        </div>
+        <div class="balance-stat">
+          <span class="stat-lbl">Spent (This Month)</span>
+          <span id="dash-month-expense" class="stat-val negative">₹0.00</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Row 1: Three stat widgets -->
     <div class="widget-row" id="overview-widgets">
       <div class="widget" id="widget-daily">
-        <div class="widget-label">Today</div>
+        <div class="widget-label">Today's Spend</div>
         <div class="widget-amount" id="dash-daily-amount">₹0.00</div>
         <div class="widget-sub" id="dash-daily-count">0 expenses</div>
       </div>
       <div class="widget" id="widget-weekly">
-        <div class="widget-label">This Week</div>
+        <div class="widget-label">This Week's Spend</div>
         <div class="widget-amount" id="dash-weekly-amount">₹0.00</div>
         <div class="widget-sub" id="dash-weekly-count">0 expenses</div>
       </div>
       <div class="widget" id="widget-monthly">
-        <div class="widget-label">This Month</div>
+        <div class="widget-label">This Month's Spend</div>
         <div class="widget-amount" id="dash-monthly-amount">₹0.00</div>
         <div class="widget-sub" id="dash-monthly-count">0 expenses</div>
       </div>
@@ -270,16 +301,28 @@
       <span id="dash-month-range">Month: — to —</span>
     </div>
 
-    <!-- Row 3: Recent Transactions -->
-    <div class="card" id="dash-recent-card">
-      <div class="card-header">
-        <h3>Recent Transactions</h3>
-        <button class="link-btn" id="dash-view-all">View All</button>
+    <div class="dash-grid">
+      <!-- Recent Transactions -->
+      <div class="card" id="dash-recent-card">
+        <div class="card-header">
+          <h3>Recent Transactions</h3>
+          <button class="link-btn" id="dash-view-all">View All</button>
+        </div>
+        <div id="dash-recent-list">
+          <!-- filled by JS -->
+        </div>
+        <div class="empty-state hidden" id="dash-empty">No transactions recorded yet.</div>
       </div>
-      <div id="dash-recent-list">
-        <!-- filled by JS -->
+
+      <!-- Cashflow Graph -->
+      <div class="card chart-card">
+        <div class="card-header">
+          <h3>Cashflow (Income vs Expenses)</h3>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-dash-cashflow"></canvas>
+        </div>
       </div>
-      <div class="empty-state hidden" id="dash-empty">No expenses recorded yet.</div>
     </div>
 
   </div><!-- /#page-dashboard -->
@@ -294,6 +337,28 @@
       <button class="icon-btn" id="analysis-prev-month">&#8592;</button>
       <span id="analysis-month-label">Loading...</span>
       <button class="icon-btn" id="analysis-next-month">&#8594;</button>
+    </div>
+
+    <!-- Calendar Card -->
+    <div class="card calendar-card">
+      <div class="card-header">
+        <h3>Expense Calendar</h3>
+        <span class="chart-subtitle">Click a day to view detailed transactions</span>
+      </div>
+      <div class="calendar-wrapper">
+        <div class="calendar-weekdays">
+          <div>Sun</div>
+          <div>Mon</div>
+          <div>Tue</div>
+          <div>Wed</div>
+          <div>Thu</div>
+          <div>Fri</div>
+          <div>Sat</div>
+        </div>
+        <div id="analysis-calendar-grid" class="calendar-grid">
+          <!-- Days populated dynamically by JS -->
+        </div>
+      </div>
     </div>
 
     <!-- Chart 1: Daily Spending Bar Chart -->
@@ -395,9 +460,265 @@
 
   </div><!-- /#page-settings -->
 
+  <!-- ═══════════════════════════════════════════════════════════
+       INCOME PAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-income">
+    <header class="app-header">
+      <h1 class="app-title">Income Tracker</h1>
+      <p class="app-subtitle">Log and monitor your revenue streams.</p>
+    </header>
+
+    <!-- Monthly Summary Section -->
+    <section class="card" id="income-summary-section" aria-label="Monthly Income Summary">
+      <div class="summary-header">
+        <div>
+          <h2 class="section-title">Monthly Income</h2>
+          <p id="income-summary-month" class="summary-month-label">Loading...</p>
+        </div>
+        <div class="summary-total-block">
+          <span class="summary-total-label">Total Earned</span>
+          <span id="income-summary-total" class="summary-total-amount" style="color: var(--success);">₹0.00</span>
+        </div>
+      </div>
+      <div id="income-summary-breakdown" class="summary-breakdown">
+        <!-- Breakdown bars rendered by app.js -->
+      </div>
+    </section>
+
+    <!-- Add / Edit Income Form Section -->
+    <section class="card" aria-label="Add or Edit Income">
+      <h2 class="section-title" id="income-form-heading">Add Income</h2>
+
+      <form id="income-form" novalidate>
+        <div class="form-grid">
+          <!-- Row 1: Title + Amount -->
+          <div class="form-group">
+            <label for="field-income-title">Title</label>
+            <input
+              type="text"
+              id="field-income-title"
+              name="title"
+              maxlength="200"
+              placeholder="e.g., Monthly Salary"
+              required
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="field-income-amount">Amount (₹)</label>
+            <input
+              type="number"
+              id="field-income-amount"
+              name="amount"
+              min="0.01"
+              step="0.01"
+              max="10000000"
+              placeholder="0.00"
+              required
+            />
+          </div>
+
+          <!-- Row 2: Category + Date -->
+          <div class="form-group">
+            <label for="field-income-category">Category</label>
+            <select id="field-income-category" name="category" required>
+              <option value="">Select category</option>
+              <option value="Salary">Salary</option>
+              <option value="Freelance">Freelance</option>
+              <option value="Investment">Investment</option>
+              <option value="Gift">Gift</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="field-income-date">Date</label>
+            <input
+              type="date"
+              id="field-income-date"
+              name="date"
+              required
+            />
+          </div>
+
+          <!-- Row 3: Account Selector + Note -->
+          <div class="form-group">
+            <label for="field-income-account">Account</label>
+            <select id="field-income-account" name="account_id" required>
+              <!-- Filled dynamically by app.js -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <!-- empty grid cell for alignment -->
+          </div>
+
+          <div class="form-group form-group--full">
+            <label for="field-income-note">Note <span class="optional-label">(optional)</span></label>
+            <textarea
+              id="field-income-note"
+              name="note"
+              maxlength="1000"
+              rows="2"
+              placeholder="Optional note..."
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Error message -->
+        <p id="income-form-error" class="form-error" role="alert" aria-live="polite"></p>
+
+        <!-- Form actions -->
+        <div class="form-actions">
+          <button type="submit" id="btn-income-submit" class="btn btn-primary" style="background-color: var(--success); border-color: var(--success);">Add Income</button>
+          <button type="button" id="btn-income-cancel" class="btn btn-secondary" style="display:none;">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Filter Controls Bar -->
+    <section class="card filter-bar" aria-label="Filter Income">
+      <h2 class="section-title">Filter Income</h2>
+      <div class="filter-grid">
+        <div class="form-group">
+          <label for="filter-income-category">Category</label>
+          <select id="filter-income-category">
+            <option value="">All Categories</option>
+            <option value="Salary">Salary</option>
+            <option value="Freelance">Freelance</option>
+            <option value="Investment">Investment</option>
+            <option value="Gift">Gift</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="filter-income-from">From Date</label>
+          <input type="date" id="filter-income-from" />
+        </div>
+
+        <div class="form-group">
+          <label for="filter-income-to">To Date</label>
+          <input type="date" id="filter-income-to" />
+        </div>
+
+        <div class="form-group">
+          <label for="filter-income-search">Search Title</label>
+          <input type="text" id="filter-income-search" placeholder="Search title..." autocomplete="off" />
+        </div>
+
+        <div class="form-group filter-clear-group">
+          <label>&nbsp;</label>
+          <button type="button" id="btn-clear-income-filters" class="btn btn-secondary">Clear Filters</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Income List Section -->
+    <section class="card" aria-label="Income List">
+      <h2 class="section-title">Income History</h2>
+      <p id="income-empty-state" class="empty-state" style="display:none;">
+        No income recorded yet.
+      </p>
+
+      <div class="table-wrapper">
+        <table class="expense-table" aria-label="List of income">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Title</th>
+              <th scope="col">Category</th>
+              <th scope="col" class="text-right">Amount</th>
+              <th scope="col">Note</th>
+              <th scope="col" class="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="income-list">
+            <!-- Rows rendered by app.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div><!-- /#page-income -->
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ACCOUNTS PAGE
+  ════════════════════════════════════════════════════════════════ -->
+  <div class="page hidden" id="page-accounts">
+    <header class="app-header">
+      <h1 class="app-title">Accounts Management</h1>
+      <p class="app-subtitle">Set your initial balance and track your liquidity.</p>
+    </header>
+
+    <div class="accounts-container">
+      <!-- Accounts list cards -->
+      <div id="accounts-cards-grid" class="accounts-grid">
+        <!-- filled by JS -->
+      </div>
+
+      <!-- Add/Edit Account card -->
+      <div class="card" id="account-editor-card" style="margin-top: 24px;">
+        <h3 class="section-title" id="account-form-title">Account Settings</h3>
+        <p class="settings-desc">Manage the initial balance. The current balance is automatically calculated as: Initial Balance + Income - Expenses.</p>
+        
+        <form id="account-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="field-account-name">Account Name</label>
+              <input type="text" id="field-account-name" placeholder="e.g. Main Account" required />
+            </div>
+            <div class="form-group">
+              <label for="field-account-initial">Initial Balance (₹)</label>
+              <input type="number" id="field-account-initial" placeholder="0.00" min="0" step="0.01" required />
+            </div>
+          </div>
+          
+          <p id="account-form-error" class="form-error" role="alert"></p>
+          <p id="account-form-success" class="form-success" role="alert"></p>
+          
+          <div class="form-actions" style="margin-top: 12px;">
+            <button type="submit" id="btn-account-submit" class="btn btn-primary">Save Account</button>
+            <button type="button" id="btn-account-cancel" class="btn btn-secondary" style="display:none;">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div><!-- /#page-accounts -->
+
       </div><!-- /.page-viewport -->
     </main><!-- /.main-content -->
   </div><!-- /.app-layout -->
+
+  <!-- Calendar Day Detail Modal -->
+  <div id="calendar-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-date-title">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h3 id="modal-date-title">Date</h3>
+        <button id="modal-close-btn" class="modal-close-btn" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-hero">
+          <div class="modal-hero-label">Total Spent</div>
+          <div id="modal-total-amount" class="modal-hero-amount">₹0.00</div>
+          <div id="modal-expense-count" class="modal-hero-count">0 expenses</div>
+        </div>
+
+        <div class="modal-section-title">Category Breakdown</div>
+        <div id="modal-category-breakdown" class="modal-cat-list">
+          <!-- Category pills rendered dynamically -->
+        </div>
+
+        <div class="modal-section-title">Transactions</div>
+        <div class="modal-tx-wrapper">
+          <div id="modal-tx-list" class="modal-tx-list">
+            <!-- Transactions rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js" defer></script>
 </body>
