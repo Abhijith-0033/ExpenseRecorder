@@ -15,6 +15,14 @@ const CATEGORY_COLORS = {
   Other:         '#8888a0'
 };
 
+// Shared dynamic color map — updated whenever categories are fetched from DB
+// Falls back to CATEGORY_COLORS for any known built-in, then a default grey
+let categoryColorMap = { ...CATEGORY_COLORS };
+
+function getCategoryColor(name) {
+  return categoryColorMap[name] || CATEGORY_COLORS[name] || '#8888a0';
+}
+
 const state = {
   expenses:  [],
   editingId: null,
@@ -89,10 +97,10 @@ async function loadSummary() {
     container.innerHTML = '';
 
     data.breakdown.forEach(item => {
-      const pct = data.totalSpent > 0
+      const pct   = data.totalSpent > 0
         ? ((item.total / data.totalSpent) * 100).toFixed(1)
         : 0;
-      const color = CATEGORY_COLORS[item.category] || '#888';
+      const color = getCategoryColor(item.category);
 
       const row = document.createElement('div');
       row.className = 'breakdown-row';
@@ -287,7 +295,10 @@ function startEdit(id) {
   document.getElementById('field-title').value    = expense.title;
   document.getElementById('field-amount').value   = expense.amount;
   document.getElementById('field-category').value = expense.category;
-  document.getElementById('field-date').value     = expense.date;
+  // Remove max constraint so we can set a historical date without being blocked
+  const dateField = document.getElementById('field-date');
+  dateField.removeAttribute('max');
+  dateField.value = expense.date;
   document.getElementById('field-note').value     = expense.note || '';
 
   state.editingId = id;
@@ -302,7 +313,10 @@ function startEdit(id) {
 
 function cancelEdit() {
   document.getElementById('expense-form').reset();
-  document.getElementById('field-date').value = getTodayString();
+  const today = getTodayString();
+  const dateField = document.getElementById('field-date');
+  dateField.value = today;
+  dateField.max   = today;   // restore future-date guard
 
   state.editingId = null;
 
@@ -462,6 +476,9 @@ async function fetchCategories() {
 // Preserves the currently selected value if it still exists after reload.
 async function loadCategoryOptions() {
   const categories = await fetchCategories();
+
+  // Update the shared dynamic color map
+  categories.forEach(cat => { categoryColorMap[cat.name] = cat.color; });
 
   const selects = [
     document.getElementById('field-category'),
@@ -2528,12 +2545,15 @@ function startIncomeEdit(id) {
   const inc = incomeState.income.find(i => i.id === id);
   if (!inc) return;
 
-  document.getElementById('field-income-title').value      = inc.title;
-  document.getElementById('field-income-amount').value     = inc.amount;
-  document.getElementById('field-income-category').value   = inc.category;
-  document.getElementById('field-income-date').value       = inc.date;
-  document.getElementById('field-income-account').value    = inc.account_id;
-  document.getElementById('field-income-note').value        = inc.note || '';
+  document.getElementById('field-income-title').value    = inc.title;
+  document.getElementById('field-income-amount').value   = inc.amount;
+  document.getElementById('field-income-category').value = inc.category;
+  // Remove max constraint so historical dates can be edited
+  const incDateField = document.getElementById('field-income-date');
+  incDateField.removeAttribute('max');
+  incDateField.value = inc.date;
+  document.getElementById('field-income-account').value  = inc.account_id;
+  document.getElementById('field-income-note').value     = inc.note || '';
 
   incomeState.editingId = id;
 
@@ -2547,7 +2567,10 @@ function startIncomeEdit(id) {
 
 function cancelIncomeEdit() {
   document.getElementById('income-form').reset();
-  document.getElementById('field-income-date').value = getTodayString();
+  const today = getTodayString();
+  const incDateField = document.getElementById('field-income-date');
+  incDateField.value = today;
+  incDateField.max   = today;   // restore future-date guard
 
   incomeState.editingId = null;
 

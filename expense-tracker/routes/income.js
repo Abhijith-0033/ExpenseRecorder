@@ -2,10 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-const INCOME_CATEGORIES = ['Salary', 'Freelance', 'Investment', 'Gift', 'Other'];
+// Dynamic validation — always reads from DB so custom income categories work
+function isValidIncomeCategory(name) {
+  if (!name) return false;
+  const row = db.prepare('SELECT id FROM income_categories WHERE name = ?').get(name);
+  return !!row;
+}
 
-function isValidCategory(name) {
-  return INCOME_CATEGORIES.includes(name);
+function getAllIncomeCategoryNames() {
+  return db.prepare('SELECT name FROM income_categories ORDER BY is_default DESC, name ASC').all().map(r => r.name);
 }
 
 function isValidDate(str) {
@@ -40,8 +45,8 @@ function validateIncomeBody(body, isPartial = false) {
   if (!isPartial || body.category !== undefined) {
     if (!body.category) {
       if (!isPartial) errors.push('Category is required.');
-    } else if (!isValidCategory(body.category)) {
-      errors.push(`Invalid category. Please select one of: ${INCOME_CATEGORIES.join(', ')}`);
+    } else if (!isValidIncomeCategory(body.category)) {
+      errors.push(`Invalid income category. Please select a valid category.`);
     }
   }
 
@@ -54,12 +59,16 @@ function validateIncomeBody(body, isPartial = false) {
   }
 
   if (!isPartial || body.account_id !== undefined) {
-    const accountId = Number(body.account_id);
-    if (!Number.isInteger(accountId) || accountId <= 0) {
-      errors.push('Account ID must be a valid positive integer.');
-    } else {
-      const acc = db.prepare('SELECT id FROM accounts WHERE id = ?').get(accountId);
-      if (!acc) errors.push('Target account does not exist.');
+    if (body.account_id !== undefined && body.account_id !== null && body.account_id !== '') {
+      const accountId = Number(body.account_id);
+      if (!Number.isInteger(accountId) || accountId <= 0) {
+        errors.push('Account ID must be a valid positive integer.');
+      } else {
+        const acc = db.prepare('SELECT id FROM accounts WHERE id = ?').get(accountId);
+        if (!acc) errors.push('Target account does not exist.');
+      }
+    } else if (!isPartial) {
+      errors.push('Account ID is required.');
     }
   }
 
@@ -97,7 +106,8 @@ router.get('/income/summary', (req, res) => {
       map[row.category] = { total: row.total, count: row.count };
     }
 
-    const breakdown = INCOME_CATEGORIES.map(cat => ({
+    const allCats = getAllIncomeCategoryNames();
+    const breakdown = allCats.map(cat => ({
       category: cat,
       total:    map[cat] ? Number(map[cat].total.toFixed(2)) : 0,
       count:    map[cat] ? map[cat].count : 0
@@ -121,7 +131,7 @@ router.get('/income/summary', (req, res) => {
 router.get('/income', (req, res) => {
   const { category, from, to, search, account_id } = req.query;
 
-  if (category && !isValidCategory(category)) {
+  if (category && !isValidIncomeCategory(category)) {
     return res.status(400).json({ error: 'Invalid category' });
   }
 
