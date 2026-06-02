@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Personal expense tracker — track your daily spending in INR with category breakdowns and monthly summaries." />
+  <title>Expense Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <nav id="main-nav">
+    <div class="nav-brand">
+      <span class="nav-logo">₹</span>
+      <span class="nav-title">ExpenseTracker</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab" data-page="dashboard">Dashboard</button>
+      <button class="nav-tab active" data-page="expenses">Expenses</button>
+      <button class="nav-tab" data-page="analysis">Analysis</button>
+      <button class="nav-tab" data-page="settings">Settings</button>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="page" id="page-expenses">
+    <header class="app-header">
+      <h1 class="app-title">Expense Tracker</h1>
+      <p class="app-subtitle">Personal finance, simplified.</p>
+    </header>
+
+    <!-- Monthly Summary Section -->
+    <section class="card" id="summary-section" aria-label="Monthly Summary">
+      <div class="summary-header">
+        <div>
+          <h2 class="section-title">Monthly Summary</h2>
+          <p id="summary-month" class="summary-month-label">Loading...</p>
+        </div>
+        <div class="summary-total-block">
+          <span class="summary-total-label">Total Spent</span>
+          <span id="summary-total" class="summary-total-amount">₹0.00</span>
+        </div>
+      </div>
+      <div id="summary-breakdown" class="summary-breakdown">
+        <!-- Breakdown bars rendered by app.js -->
+      </div>
+    </section>
+
+    <!-- Add / Edit Expense Form Section -->
+    <section class="card" aria-label="Add or Edit Expense">
+      <h2 class="section-title" id="form-heading">Add Expense</h2>
+
+      <form id="expense-form" novalidate>
+        <div class="form-grid">
+          <!-- Row 1: Title + Amount -->
+          <div class="form-group">
+            <label for="field-title">Title</label>
+            <input
+              type="text"
+              id="field-title"
+              name="title"
+              maxlength="200"
+              placeholder="e.g., Coffee at Starbucks"
+              required
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="field-amount">Amount (₹)</label>
+            <input
+              type="number"
+              id="field-amount"
+              name="amount"
+              min="0.01"
+              step="0.01"
+              max="10000000"
+              placeholder="0.00"
+              required
+            />
+          </div>
+
+          <!-- Row 2: Category + Date -->
+          <div class="form-group">
+            <label for="field-category">Category</label>
+            <select id="field-category" name="category" required>
+              <option value="">Select category</option>
+              <option value="Food">Food</option>
+              <option value="Transport">Transport</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Bills">Bills</option>
+              <option value="Entertainment">Entertainment</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="field-date">Date</label>
+            <input
+              type="date"
+              id="field-date"
+              name="date"
+              required
+            />
+          </div>
+
+          <!-- Row 3: Note (full width) -->
+          <div class="form-group form-group--full">
+            <label for="field-note">Note <span class="optional-label">(optional)</span></label>
+            <textarea
+              id="field-note"
+              name="note"
+              maxlength="1000"
+              rows="2"
+              placeholder="Optional note..."
+            ></textarea>
+          </div>
+        </div>
+
+        <!-- Error message (hidden by default) -->
+        <p id="form-error" class="form-error" role="alert" aria-live="polite"></p>
+
+        <!-- Form action buttons -->
+        <div class="form-actions">
+          <button type="submit" id="btn-submit" class="btn btn-primary">Add Expense</button>
+          <button type="button" id="btn-cancel" class="btn btn-secondary" style="display:none;">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Filter Controls Bar -->
+    <section class="card filter-bar" aria-label="Filter Expenses">
+      <h2 class="section-title">Filter Expenses</h2>
+      <div class="filter-grid">
+        <div class="form-group">
+          <label for="filter-category">Category</label>
+          <select id="filter-category">
+            <option value="">All Categories</option>
+            <option value="Food">Food</option>
+            <option value="Transport">Transport</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Bills">Bills</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="filter-from">From Date</label>
+          <input type="date" id="filter-from" />
+        </div>
+
+        <div class="form-group">
+          <label for="filter-to">To Date</label>
+          <input type="date" id="filter-to" />
+        </div>
+
+        <div class="form-group">
+          <label for="filter-search">Search Title</label>
+          <input type="text" id="filter-search" placeholder="Search by title..." autocomplete="off" />
+        </div>
+
+        <div class="form-group filter-clear-group">
+          <label>&nbsp;</label>
+          <button type="button" id="btn-clear-filters" class="btn btn-secondary">Clear Filters</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Expense List Section -->
+    <section class="card" aria-label="Expense List">
+      <h2 class="section-title">Expenses</h2>
+
+      <p id="empty-state" class="empty-state" style="display:none;">
+        No expenses yet. Add your first one above.
+      </p>
+
+      <div class="table-wrapper">
+        <table 
